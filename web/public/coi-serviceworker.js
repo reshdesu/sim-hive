@@ -35,7 +35,7 @@ if (typeof window === 'undefined') {
   // Main thread: Register the service worker on the current script URL
   const sw = navigator.serviceWorker;
   if (sw) {
-    const scriptSrc = (document.currentScript as HTMLScriptElement)?.src || "./coi-serviceworker.js";
+    const scriptSrc = (document.currentScript && document.currentScript.src) || "./coi-serviceworker.js";
     sw.register(scriptSrc, { scope: "./" })
       .then((registration) => {
         registration.addEventListener("updatefound", () => {
