@@ -4,9 +4,10 @@ import wasm from 'vite-plugin-wasm'
 import path from 'path'
 
 export default defineConfig({
+  base: './',
   plugins: [
     // wasm() must come before solid so the .wasm transform runs first
-    wasm(),
+    (wasm as any)(),
     solidPlugin(),
   ],
 

@@ -87,7 +87,7 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
       keyboard: new pc.Keyboard(window),
       mouse: new pc.Mouse(canvas),
       touch: new pc.TouchDevice(canvas),
-    })
+    } as any)
   } catch (err: any) {
     app = null
     throw new Error(`Failed to initialize PlayCanvas: ${err?.message || err}`)
@@ -124,7 +124,7 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   app.root.addChild(light)
 
   // Ambient lighting
-  app.scene.ambientColor = new pc.Color(0.15, 0.2, 0.3)
+  ;(app.scene as any).ambientColor = new pc.Color(0.15, 0.2, 0.3)
 
   // 3. Set up Ground grid boundary (200x200 matching Rust simulation space)
   // Create a procedural grid texture to give coordinate reference
@@ -160,7 +160,7 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
     magFilter: pc.FILTER_LINEAR,
     addressU: pc.ADDRESS_REPEAT,
     addressV: pc.ADDRESS_REPEAT,
-  })
+  } as any)
   gridTexture.setSource(gridCanvas)
 
   const groundMaterial = new pc.StandardMaterial()
@@ -367,7 +367,7 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
         }
 
         if (agentEntities[i].render!.material !== mat) {
-          agentEntities[i].render!.material = mat
+          agentEntities[i].render!.material = mat as pc.Material
         }
       }
     }

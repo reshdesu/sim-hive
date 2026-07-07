@@ -2,7 +2,7 @@
  * App.tsx — Sim Hive root component                                            *
  * ─────────────────────────────────────────────────────────────────────────── */
 
-import { createSignal, onMount, onCleanup, type Component } from 'solid-js'
+import { createSignal, onCleanup, type Component } from 'solid-js'
 import { simStats, isRunning, startSimulation, stopSimulation } from './sim-bridge'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -23,14 +23,12 @@ const App: Component = () => {
   let canvasRef!: HTMLCanvasElement
 
   const [agentInput, setAgentInput] = createSignal(AGENT_COUNT)
-  const [wasmReady, setWasmReady] = createSignal(false)
   const [wasmError, setWasmError] = createSignal<string | null>(null)
 
   // ── Wasm lifecycle ─────────────────────────────────────────────────────────
   async function handleStart() {
     try {
       await startSimulation(canvasRef, agentInput())
-      setWasmReady(true)
     } catch (e: any) {
       setWasmError(String(e?.message ?? e))
       console.error('[sim-hive] Wasm init failed:', e)
