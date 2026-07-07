@@ -13,22 +13,11 @@ const SATISFIED: f32 = 0.95;
 const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
 const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
 
-pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position]) {
+pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], grid: &[Vec<usize>]) {
     debug_assert_eq!(needs.len(), meta.len());
     debug_assert_eq!(needs.len(), positions.len());
 
-    // 1. Build spatial grid index once per frame: O(N)
-    let mut grid = vec![Vec::with_capacity(16); GRID_SIZE * GRID_SIZE];
-    for j in 0..positions.len() {
-        // Skip sleeping agents since others won't socialize with them
-        if (meta[j].archetype_flags & flags::SLEEPING) != 0 { continue; }
-        
-        let cx = (positions[j].x / CELL_SIZE).max(0.0).min(99.9) as usize;
-        let cz = (positions[j].z / CELL_SIZE).max(0.0).min(99.9) as usize;
-        grid[cx + cz * GRID_SIZE].push(j);
-    }
-
-    // 2. Process behavior FSM
+    // 1. Process behavior FSM
     for i in 0..needs.len() {
         let mut flags_i = meta[i].archetype_flags;
 

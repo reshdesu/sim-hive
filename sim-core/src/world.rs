@@ -18,6 +18,13 @@ pub struct World {
     pub(crate) meta:       Vec<AgentMeta>,
 
     pub(crate) tick: u64,
+
+    // WebGL-instanced matrix buffers
+    state_matrices: Vec<Vec<f32>>,
+    state_counts:   Vec<u32>,
+
+    // Shared spatial grid for collision/proximity checks
+    grid: Vec<Vec<usize>>,
 }
 
 #[wasm_bindgen]
@@ -71,23 +78,134 @@ impl World {
             })
             .collect();
 
-        Self { count, positions, velocities, needs, meta, tick: 0 }
+        let state_matrices = vec![
+            vec![0.0; n * 16], // Walk
+            vec![0.0; n * 16], // Sleep
+            vec![0.0; n * 16], // Eat
+            vec![0.0; n * 16], // Social
+            vec![0.0; n * 16], // Wash
+        ];
+        let state_counts = vec![0; 5];
+        let grid = vec![Vec::with_capacity(16); 100 * 100];
+
+        let mut world = Self {
+            count,
+            positions,
+            velocities,
+            needs,
+            meta,
+            tick: 0,
+            state_matrices,
+            state_counts,
+            grid,
+        };
+
+        // Initialize first frame spatial structures and matrices
+        world.rebuild_spatial_grid();
+        world.update_state_matrices();
+        world
     }
 
-    /// Advance the simulation by one tick.
-    /// Returns the current tick count (useful for JS scheduling).
     pub fn tick(&mut self) -> u64 {
         systems::needs_decay::run(&mut self.needs);
-        systems::pathfinding::run(&self.positions, &self.meta, &mut self.velocities, self.tick);
-        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions);
+
+        // Rebuild the shared spatial grid once per frame: allocation-free and O(N)
+        self.rebuild_spatial_grid();
+
+        systems::pathfinding::run(&self.positions, &self.meta, &mut self.velocities, &self.grid, self.tick);
+        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions, &self.grid);
         systems::movement::run(&mut self.positions, &self.velocities);
+
+        // Build flat transform matrices for GPU hardware instancing in Rust
+        self.update_state_matrices();
+
         self.tick += 1;
         self.tick
     }
 
+    /// Rebuild the shared spatial grid once per frame.
+    /// Performs allocation-free grid construction.
+    fn rebuild_spatial_grid(&mut self) {
+        for cell in &mut self.grid {
+            cell.clear();
+        }
+
+        const GRID_SIZE: usize = 100;
+        const CELL_SIZE: f32 = 2.0;
+
+        for (j, (pos, m)) in self.positions.iter().zip(self.meta.iter()).enumerate() {
+            if (m.archetype_flags & flags::SLEEPING) != 0 { continue; }
+
+            let cx = (pos.x / CELL_SIZE).max(0.0).min(99.9) as usize;
+            let cz = (pos.z / CELL_SIZE).max(0.0).min(99.9) as usize;
+            self.grid[cx + cz * GRID_SIZE].push(j);
+        }
+    }
+
+    /// Rebuild flat transform matrices in memory for the 5 vital states.
+    /// Eliminates JS matrix packing loop overhead, optimized with bounds-check free zip iterators.
+    fn update_state_matrices(&mut self) {
+        // Reset counts
+        for c in self.state_counts.iter_mut() {
+            *c = 0;
+        }
+
+        for (pos, m) in self.positions.iter().zip(self.meta.iter()) {
+            let flags_i = m.archetype_flags;
+
+            let mut state_idx = 0;
+            if (flags_i & flags::SLEEPING) != 0 {
+                state_idx = 1;
+            } else if (flags_i & flags::EATING) != 0 {
+                state_idx = 2;
+            } else if (flags_i & flags::SOCIALIZING) != 0 {
+                state_idx = 3;
+            } else if (flags_i & flags::IN_BUILDING) != 0 {
+                state_idx = 4;
+            }
+
+            let count = self.state_counts[state_idx] as usize;
+            let offset = count * 16;
+            
+            let buf = &mut self.state_matrices[state_idx];
+            
+            // Set 4x4 column-major matrix representing translation (pos.x, pos.y, pos.z)
+            // and scale (0.8, 1.6, 0.8) with identity rotation
+            buf[offset] = 0.8;
+            buf[offset + 1] = 0.0;
+            buf[offset + 2] = 0.0;
+            buf[offset + 3] = 0.0;
+
+            buf[offset + 4] = 0.0;
+            buf[offset + 5] = 1.6;
+            buf[offset + 6] = 0.0;
+            buf[offset + 7] = 0.0;
+
+            buf[offset + 8] = 0.0;
+            buf[offset + 9] = 0.0;
+            buf[offset + 10] = 0.8;
+            buf[offset + 11] = 0.0;
+
+            buf[offset + 12] = pos.x;
+            buf[offset + 13] = pos.y;
+            buf[offset + 14] = pos.z;
+            buf[offset + 15] = 1.0;
+
+            self.state_counts[state_idx] += 1;
+        }
+    }
+
+    /// Exposes a pointer to the matrix buffer of the given state index
+    pub fn state_matrices_ptr(&self, state_idx: u32) -> *const f32 {
+        self.state_matrices[state_idx as usize].as_ptr()
+    }
+
+    /// Exposes the active count of agents in the given state index
+    pub fn state_count(&self, state_idx: u32) -> u32 {
+        self.state_counts[state_idx as usize]
+    }
+
     /// Returns a pointer into Wasm linear memory for the flat Position[].
-    /// The JS layer wraps this as: `new Float32Array(memory.buffer, ptr, len/4)`
-    /// for zero-copy GPU buffer upload.
     pub fn positions_ptr(&self) -> *const f32 {
         self.positions.as_ptr() as *const f32
     }

@@ -38,6 +38,7 @@ interface InstancedState {
   entity: pc.Entity
   meshInstance: pc.MeshInstance
   vertexBuffer: pc.VertexBuffer
+  capacity: number
   count: number
 }
 
@@ -264,13 +265,12 @@ function initInstancing(count: number) {
 
     const meshInstance = entity.render!.meshInstances[0]
     
-    // Pre-allocate the vertex buffer holding the instanced transform matrices.
-    // Each instance needs 16 floats (a 4x4 matrix).
-    const matrixData = new Float32Array(count * 16)
+    // Start with a sensible initial capacity per state to avoid early re-allocations
+    // e.g. 10% of total agent count, minimum 256
+    const initialCapacity = Math.max(256, Math.ceil(count / 10))
     
     const format = pc.VertexFormat.getDefaultInstancingFormat(app.graphicsDevice)
-    const vertexBuffer = new pc.VertexBuffer(app.graphicsDevice, format, count, {
-      data: matrixData,
+    const vertexBuffer = new pc.VertexBuffer(app.graphicsDevice, format, initialCapacity, {
       usage: pc.BUFFER_DYNAMIC,
     } as any)
 
@@ -281,6 +281,7 @@ function initInstancing(count: number) {
       entity,
       meshInstance,
       vertexBuffer,
+      capacity: initialCapacity,
       count: 0
     })
   }
@@ -333,41 +334,41 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
     // ── Simulation tick ────────────────────────────────────────────────────
     const tick = world.tick()
 
-    // ── Read Needs from Wasm memory & Compute aggregates ────────────────────
-    let avgHunger = 0.9
-    let avgEnergy = 0.9
-    let avgSocial = 0.7
-    let avgHygiene = 0.9
-
-    if (wasmMemory) {
-      const needsPtr = world.needs_ptr()
-      const needs = new Float32Array(wasmMemory.buffer, needsPtr, agentCount * 4)
-
-      let sumHunger = 0
-      let sumEnergy = 0
-      let sumSocial = 0
-      let sumHygiene = 0
-
-      for (let i = 0; i < agentCount; i++) {
-        const idx = i * 4
-        sumHunger += needs[idx]
-        sumEnergy += needs[idx + 1]
-        sumSocial += needs[idx + 2]
-        sumHygiene += needs[idx + 3]
-      }
-
-      avgHunger = sumHunger / agentCount
-      avgEnergy = sumEnergy / agentCount
-      avgSocial = sumSocial / agentCount
-      avgHygiene = sumHygiene / agentCount
-    }
-
-    // ── FPS counter (update every 60 frames) ──────────────────────────────
+    // ── FPS counter & UI Stats (update every 60 frames) ───────────────────
     frameCount++
     fpsAccum += dt
     if (frameCount % 60 === 0) {
       const fps = Math.round(1000 / (fpsAccum / 60))
       fpsAccum = 0
+
+      let avgHunger = 0.9
+      let avgEnergy = 0.9
+      let avgSocial = 0.7
+      let avgHygiene = 0.9
+
+      if (wasmMemory) {
+        const needsPtr = world.needs_ptr()
+        const needs = new Float32Array(wasmMemory.buffer, needsPtr, agentCount * 4)
+
+        let sumHunger = 0
+        let sumEnergy = 0
+        let sumSocial = 0
+        let sumHygiene = 0
+
+        for (let i = 0; i < agentCount; i++) {
+          const idx = i * 4
+          sumHunger += needs[idx]
+          sumEnergy += needs[idx + 1]
+          sumSocial += needs[idx + 2]
+          sumHygiene += needs[idx + 3]
+        }
+
+        avgHunger = sumHunger / agentCount
+        avgEnergy = sumEnergy / agentCount
+        avgSocial = sumSocial / agentCount
+        avgHygiene = sumHygiene / agentCount
+      }
+
       setSimStats({
         tick: Number(tick),
         fps,
@@ -381,19 +382,36 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
 
     // ── Zero-copy Wasm ↔ PlayCanvas update ──────────────────────────────────
     if (wasmMemory && instancedStates.length > 0) {
-      for (let state = 0; state < 5; state++) {
-        const s = instancedStates[state]
-        const count = world.state_count(state)
+      try {
+        for (let state = 0; state < 5; state++) {
+          const s = instancedStates[state]
+          const count = world.state_count(state)
 
-        if (count > 0) {
-          const ptr = world.state_matrices_ptr(state)
-          // Create zero-copy view over the Wasm memory buffer directly (no JS copy/loop)
-          const matrixView = new Float32Array(wasmMemory.buffer, ptr, count * 16)
-          s.vertexBuffer.setData(matrixView as any)
-          s.meshInstance.instancingCount = count
-        } else {
-          s.meshInstance.instancingCount = 0
+          if (count > 0) {
+            // Re-allocate larger VertexBuffer on the fly if state count exceeds capacity
+            if (count > s.capacity) {
+              s.capacity = Math.max(s.capacity * 2, count)
+              s.vertexBuffer.destroy() // Clean up WebGL resource
+
+              const format = pc.VertexFormat.getDefaultInstancingFormat(app!.graphicsDevice)
+              s.vertexBuffer = new pc.VertexBuffer(app!.graphicsDevice, format, s.capacity, {
+                usage: pc.BUFFER_DYNAMIC,
+              } as any)
+              s.meshInstance.setInstancing(s.vertexBuffer)
+            }
+
+            const ptr = world.state_matrices_ptr(state)
+            // Create zero-copy view matching the current vertex buffer capacity exactly
+            const matrixView = new Float32Array(wasmMemory.buffer, ptr, s.capacity * 16)
+            s.vertexBuffer.setData(matrixView as any)
+            s.meshInstance.instancingCount = count
+          } else {
+            s.meshInstance.instancingCount = 0
+          }
         }
+      } catch (err) {
+        console.error("[sim-bridge] GPU buffer update failed:", err)
+        stopSimulation()
       }
     }
 

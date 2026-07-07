@@ -17,21 +17,11 @@ const STEER_DIST: f32 = 15.0;
 const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
 const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
 
-pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocity], tick: u64) {
+pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocity], grid: &[Vec<usize>], tick: u64) {
     debug_assert_eq!(positions.len(), velocities.len());
     debug_assert_eq!(positions.len(), meta.len());
 
-    // 1. Build spatial grid index once per frame: O(N)
-    let mut grid = vec![Vec::with_capacity(16); GRID_SIZE * GRID_SIZE];
-    for j in 0..positions.len() {
-        if (meta[j].archetype_flags & flags::SLEEPING) != 0 { continue; }
-        
-        let cx = (positions[j].x / CELL_SIZE).max(0.0).min(99.9) as usize;
-        let cz = (positions[j].z / CELL_SIZE).max(0.0).min(99.9) as usize;
-        grid[cx + cz * GRID_SIZE].push(j);
-    }
-
-    // 2. Compute velocities
+    // 1. Compute velocities
     for (i, vel) in velocities.iter_mut().enumerate() {
         let m = meta[i];
         
