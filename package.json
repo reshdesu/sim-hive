@@ -8,7 +8,8 @@
     "dev": "pnpm build:wasm && pnpm --filter web dev",
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm build:wasm && pnpm --filter web build",
-    "clean": "rm -rf sim-core/pkg web/dist web/node_modules"
+    "clean": "rm -rf sim-core/pkg web/dist web/node_modules",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "engines": {
     "pnpm": ">=11"

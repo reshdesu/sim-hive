@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Pre-commit hook to scan staged files for secrets using gitleaks
+if ! command -v gitleaks &> /dev/null
+then
+    echo "WARNING: gitleaks is not installed. Skipping secrets scan."
+    exit 0
+fi
+
+echo "Running pre-commit secrets scan with gitleaks..."
+gitleaks protect --staged --verbose --redact
+
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "========================================================================="
+    echo "❌ COMMIT ABORTED: Potential secrets or credentials detected by Gitleaks!"
+    echo "Please remove the secrets, stage the files, and try committing again."
+    echo "========================================================================="
+    exit $EXIT_CODE
+fi
+
+echo "✓ Secrets scan passed successfully. Committing..."
+exit 0

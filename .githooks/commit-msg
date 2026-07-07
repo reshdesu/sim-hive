@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# commit-msg hook to enforce Conventional Commits naming convention.
+# Reference: https://www.conventionalcommits.org/en/v1.0.0/
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Strip out comments starting with # and empty lines to get the actual commit subject
+CLEAN_MSG=$(echo "$COMMIT_MSG" | grep -v '^#' | sed '/^$/d' | head -n 1)
+
+# Regex pattern for Conventional Commits (with MANDATORY scope):
+# Format: <type>(<scope>): <description> (description must start with a lowercase letter or digit)
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+REGEXP="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\([a-zA-Z0-9_-]+\): [a-zA-Z0-9].+"
+
+if [[ ! "$CLEAN_MSG" =~ $REGEXP ]]; then
+    echo "========================================================================="
+    echo "❌ COMMIT ABORTED: Commit message does not follow Conventional Commits!"
+    echo "========================================================================="
+    echo "Your commit message was:"
+    echo "  \"$CLEAN_MSG\""
+    echo ""
+    echo "Required format (SCOPE IS MANDATORY):"
+    echo "  <type>(<scope>): <description>"
+    echo ""
+    echo "Examples:"
+    echo "  feat(web): add population vitals dynamic dashboard"
+    echo "  fix(wasm): resolve index boundary checks in need decay"
+    echo "  docs(readme): add installation guide and usage instructions"
+    echo ""
+    echo "Wrong format (will be rejected):"
+    echo "  feat: add population vitals dynamic dashboard (missing scope)"
+    echo ""
+    echo "Allowed types:"
+    echo "  feat      - A new feature"
+    echo "  fix       - A bug fix"
+    echo "  docs      - Documentation changes only"
+    echo "  style     - Code style changes (white-space, formatting, semicolons, etc.)"
+    echo "  refactor  - Code refactoring (neither fixes a bug nor adds a feature)"
+    echo "  perf      - Performance improvements"
+    echo "  test      - Adding or correcting tests"
+    echo "  chore     - Build process, tool updates, or auxiliary library changes"
+    echo "========================================================================="
+    exit 1
+fi
+
+exit 0
