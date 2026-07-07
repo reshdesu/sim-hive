@@ -33,7 +33,22 @@ let fpsAccum = 0
 
 // PlayCanvas application state
 let app: pc.Application | null = null
-let agentEntities: pc.Entity[] = []
+
+interface InstancedState {
+  entity: pc.Entity
+  meshInstance: pc.MeshInstance
+  vertexBuffer: pc.VertexBuffer
+  matrixData: Float32Array
+  count: number
+}
+
+let instancedStates: InstancedState[] = []
+
+// Scratch variables for zero-allocation matrix transformations in loop
+const scratchPos = new pc.Vec3()
+const scratchRot = new pc.Quat()
+const scratchScale = new pc.Vec3(0.8, 1.6, 0.8)
+const scratchMat = new pc.Mat4()
 
 // State-specific agent materials (P1 colors)
 let walkMaterial: pc.StandardMaterial | null = null
@@ -219,24 +234,63 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
 
 function clearAgents() {
   if (!app) return
-  for (const entity of agentEntities) {
-    entity.destroy()
+  for (const s of instancedStates) {
+    s.entity.destroy()
+    s.vertexBuffer.destroy()
   }
-  agentEntities = []
+  instancedStates = []
 }
 
-function spawnAgentEntities(count: number) {
-  if (!app || !walkMaterial) return
+function initInstancing(count: number) {
+  if (!app || !walkMaterial || !sleepMaterial || !eatMaterial || !socialMaterial || !washMaterial) return
 
-  for (let i = 0; i < count; i++) {
-    const agent = new pc.Entity(`agent-${i}`)
-    agent.addComponent('render', {
+  clearAgents()
+
+  const materials = [
+    walkMaterial,
+    sleepMaterial,
+    eatMaterial,
+    socialMaterial,
+    washMaterial
+  ]
+
+  for (let i = 0; i < materials.length; i++) {
+    const mat = materials[i]
+    
+    // Create the instanced parent entity
+    const entity = new pc.Entity(`instanced-state-${i}`)
+    entity.addComponent('render', {
       type: 'box',
     })
-    agent.setLocalScale(0.8, 1.6, 0.8) // human aspect ratio
-    agent.render!.material = walkMaterial
-    app.root.addChild(agent)
-    agentEntities.push(agent)
+    entity.render!.material = mat as pc.Material
+    
+    // Set scale to 1. The per-instance transform matrices will carry the 
+    // local agent scaling (0.8, 1.6, 0.8) and coordinates.
+    entity.setLocalScale(1, 1, 1)
+    app.root.addChild(entity)
+
+    const meshInstance = entity.render!.meshInstances[0]
+    
+    // Pre-allocate the vertex buffer holding the instanced transform matrices.
+    // Each instance needs 16 floats (a 4x4 matrix).
+    const matrixData = new Float32Array(count * 16)
+    
+    const format = pc.VertexFormat.getDefaultInstancingFormat(app.graphicsDevice)
+    const vertexBuffer = new pc.VertexBuffer(app.graphicsDevice, format, count, {
+      data: matrixData,
+      usage: pc.BUFFER_DYNAMIC,
+    } as any)
+
+    meshInstance.setInstancing(vertexBuffer)
+    meshInstance.instancingCount = 0
+
+    instancedStates.push({
+      entity,
+      meshInstance,
+      vertexBuffer,
+      matrixData,
+      count: 0
+    })
   }
 }
 
@@ -267,7 +321,7 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
   // 2. Initialise the PlayCanvas renderer
   initPlayCanvas(canvas)
   clearAgents()
-  spawnAgentEntities(agentCount)
+  initInstancing(agentCount)
 
   setSimStats({
     tick: 0,
@@ -334,40 +388,61 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
     }
 
     // ── Zero-copy Wasm ↔ PlayCanvas update ──────────────────────────────────
-    if (wasmMemory && agentEntities.length > 0) {
+    if (wasmMemory && instancedStates.length > 0) {
       const posPtr = world.positions_ptr()
       const metaPtr = world.meta_ptr()
 
-      // Create views over the Wasm memory buffer directly (no copy)
-      // Positions: 4 floats per agent (x, y, z, _pad)
       const positions = new Float32Array(wasmMemory.buffer, posPtr, agentCount * 4)
-      // Meta: 3 u32s per agent (entity_id, archetype_flags, age/household)
       const meta = new Uint32Array(wasmMemory.buffer, metaPtr, agentCount * 3)
 
+      // Reset count for all 5 states
+      for (const s of instancedStates) {
+        s.count = 0
+      }
+
       for (let i = 0; i < agentCount; i++) {
-        // 1. Update Position
         const idx = i * 4
         const x = positions[idx]
         const y = positions[idx + 1]
         const z = positions[idx + 2]
-        agentEntities[i].setPosition(x, y, z)
 
-        // 2. Update Material (Color based on state flags)
         const flags = meta[i * 3 + 1]
-        let mat = walkMaterial
-
+        
+        // Find which state slot to map to:
+        // 0: Walk (White), 1: Sleep (Blue), 2: Eat (Orange), 3: Social (Purple), 4: Wash (Green)
+        let stateIdx = 0 
         if ((flags & 8) !== 0) {         // SLEEPING = 1 << 3 (Blue)
-          mat = sleepMaterial
+          stateIdx = 1
         } else if ((flags & 16) !== 0) {  // EATING = 1 << 4 (Orange)
-          mat = eatMaterial
-        } else if ((flags & 2) !== 0) {   // SOCIALIZING = 1 << 1 (Pink/Purple)
-          mat = socialMaterial
+          stateIdx = 2
+        } else if ((flags & 2) !== 0) {   // SOCIALIZING = 1 << 1 (Purple)
+          stateIdx = 3
         } else if ((flags & 4) !== 0) {   // IN_BUILDING/WASHING = 1 << 2 (Green)
-          mat = washMaterial
+          stateIdx = 4
         }
 
-        if (agentEntities[i].render!.material !== mat) {
-          agentEntities[i].render!.material = mat as pc.Material
+        const s = instancedStates[stateIdx]
+        
+        // Set transform matrix for this agent in its active state group
+        scratchPos.set(x, y, z)
+        scratchMat.setTRS(scratchPos, scratchRot, scratchScale)
+        
+        // Copy 16 matrix floats to the vertex buffer float array
+        const matData = scratchMat.data
+        const offset = s.count * 16
+        for (let m = 0; m < 16; m++) {
+          s.matrixData[offset + m] = matData[m]
+        }
+        s.count++
+      }
+
+      // Update PlayCanvas buffers for each state
+      for (const s of instancedStates) {
+        if (s.count > 0) {
+          s.vertexBuffer.setData(s.matrixData as any)
+          s.meshInstance.instancingCount = s.count
+        } else {
+          s.meshInstance.instancingCount = 0
         }
       }
     }

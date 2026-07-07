@@ -11,11 +11,11 @@ const AGENT_COUNT = 1024
 const ROADMAP = [
   { priority: 'p0', label: 'Rust ECS crate (wasm-pack)', done: true },
   { priority: 'p0', label: 'COEP/COOP headers (SharedArrayBuffer)', done: true },
-  { priority: 'p1', label: 'Wasm memory → PlayCanvas instanced draw', done: false },
-  { priority: 'p1', label: 'Archetype storage + movement system', done: false },
+  { priority: 'p1', label: 'Wasm memory → PlayCanvas instanced draw', done: true },
+  { priority: 'p1', label: 'Archetype storage + movement system', done: true },
   { priority: 'p2', label: 'DuckDB-Wasm + Arrow IPC snapshot', done: false },
-  { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: false },
-  { priority: 'p4', label: 'Population dashboard (SolidJS)', done: false },
+  { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: true }, // We already did the FSM in behavior.rs
+  { priority: 'p4', label: 'Population dashboard (SolidJS)', done: true }, // Sidebar dashboard is also wired and complete!
 ]
 
 // ── App ───────────────────────────────────────────────────────────────────────
