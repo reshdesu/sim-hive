@@ -13,4 +13,3 @@ dist/
 .vscode/
 .idea/
 *.log
-.agents/

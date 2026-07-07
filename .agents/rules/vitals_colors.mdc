@@ -1,0 +1,19 @@
+---
+name: vitals-colors
+description: Always enforce the color coding mapping between PlayCanvas 3D agent cubes and SolidJS vitals bars.
+globs: web/src/**/*.ts, web/src/**/*.tsx, sim-core/src/**/*.rs
+---
+
+# Sim Hive Color Mapping Standard
+
+Always ensure that any visual representation of agents (their 3D material colors in PlayCanvas) maps 1-to-1 to the colors of the vitals bars in the UI:
+
+- **Hunger (Eating)**: Neon Orange (`#f5853d` / `RGB(0.96, 0.52, 0.24)`)
+- **Energy (Sleeping)**: Neon Sky Blue (`#1a9cff` / `RGB(0.26, 0.73, 0.94)`)
+- **Social (Socializing)**: Neon Violet/Purple (`#bd63e8` / `RGB(0.74, 0.39, 0.91)`)
+
+## Default State Color Rule
+- **Active / Wandering (Default)**: Always use a neutral color, specifically **Neon White / Silver** (`#e0e0e0` / `RGB(0.9, 0.9, 0.9)`).
+- **CRITICAL**: Do **NOT** use any color associated with any vital bars (e.g., Orange, Blue, Purple, or Green) for the default state, as it causes visual confusion when agents enter satisfying states.
+
+When updating agent materials or rendering code in `sim-bridge.ts`, `App.tsx`, or `components.rs`, preserve these color tokens to maintain visual alignment across the simulator.
