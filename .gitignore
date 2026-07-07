@@ -1,0 +1,16 @@
+# Node dependencies
+node_modules/
+.pnpm-store/
+dist/
+.env
+
+# Rust build outputs
+/sim-core/target/
+/sim-core/pkg/
+
+# OS / IDE / Logs
+.DS_Store
+.vscode/
+.idea/
+*.log
+.agents/
