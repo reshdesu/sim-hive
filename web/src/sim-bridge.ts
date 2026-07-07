@@ -38,17 +38,10 @@ interface InstancedState {
   entity: pc.Entity
   meshInstance: pc.MeshInstance
   vertexBuffer: pc.VertexBuffer
-  matrixData: Float32Array
   count: number
 }
 
 let instancedStates: InstancedState[] = []
-
-// Scratch variables for zero-allocation matrix transformations in loop
-const scratchPos = new pc.Vec3()
-const scratchRot = new pc.Quat()
-const scratchScale = new pc.Vec3(0.8, 1.6, 0.8)
-const scratchMat = new pc.Mat4()
 
 // State-specific agent materials (P1 colors)
 let walkMaterial: pc.StandardMaterial | null = null
@@ -288,7 +281,6 @@ function initInstancing(count: number) {
       entity,
       meshInstance,
       vertexBuffer,
-      matrixData,
       count: 0
     })
   }
@@ -389,58 +381,16 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
 
     // ── Zero-copy Wasm ↔ PlayCanvas update ──────────────────────────────────
     if (wasmMemory && instancedStates.length > 0) {
-      const posPtr = world.positions_ptr()
-      const metaPtr = world.meta_ptr()
+      for (let state = 0; state < 5; state++) {
+        const s = instancedStates[state]
+        const count = world.state_count(state)
 
-      const positions = new Float32Array(wasmMemory.buffer, posPtr, agentCount * 4)
-      const meta = new Uint32Array(wasmMemory.buffer, metaPtr, agentCount * 3)
-
-      // Reset count for all 5 states
-      for (const s of instancedStates) {
-        s.count = 0
-      }
-
-      for (let i = 0; i < agentCount; i++) {
-        const idx = i * 4
-        const x = positions[idx]
-        const y = positions[idx + 1]
-        const z = positions[idx + 2]
-
-        const flags = meta[i * 3 + 1]
-        
-        // Find which state slot to map to:
-        // 0: Walk (White), 1: Sleep (Blue), 2: Eat (Orange), 3: Social (Purple), 4: Wash (Green)
-        let stateIdx = 0 
-        if ((flags & 8) !== 0) {         // SLEEPING = 1 << 3 (Blue)
-          stateIdx = 1
-        } else if ((flags & 16) !== 0) {  // EATING = 1 << 4 (Orange)
-          stateIdx = 2
-        } else if ((flags & 2) !== 0) {   // SOCIALIZING = 1 << 1 (Purple)
-          stateIdx = 3
-        } else if ((flags & 4) !== 0) {   // IN_BUILDING/WASHING = 1 << 2 (Green)
-          stateIdx = 4
-        }
-
-        const s = instancedStates[stateIdx]
-        
-        // Set transform matrix for this agent in its active state group
-        scratchPos.set(x, y, z)
-        scratchMat.setTRS(scratchPos, scratchRot, scratchScale)
-        
-        // Copy 16 matrix floats to the vertex buffer float array
-        const matData = scratchMat.data
-        const offset = s.count * 16
-        for (let m = 0; m < 16; m++) {
-          s.matrixData[offset + m] = matData[m]
-        }
-        s.count++
-      }
-
-      // Update PlayCanvas buffers for each state
-      for (const s of instancedStates) {
-        if (s.count > 0) {
-          s.vertexBuffer.setData(s.matrixData as any)
-          s.meshInstance.instancingCount = s.count
+        if (count > 0) {
+          const ptr = world.state_matrices_ptr(state)
+          // Create zero-copy view over the Wasm memory buffer directly (no JS copy/loop)
+          const matrixView = new Float32Array(wasmMemory.buffer, ptr, count * 16)
+          s.vertexBuffer.setData(matrixView as any)
+          s.meshInstance.instancingCount = count
         } else {
           s.meshInstance.instancingCount = 0
         }
