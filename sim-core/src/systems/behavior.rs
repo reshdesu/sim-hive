@@ -10,21 +10,21 @@ use crate::components::{Needs, AgentMeta, Position, flags};
 const CRITICAL: f32 = 0.25;
 const SATISFIED: f32 = 0.95;
 
-const GRID_SIZE: usize = 20; // 20x20 grid cells
-const CELL_SIZE: f32 = 10.0; // 10.0 units per cell over 200x200 space
+const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
+const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
 
 pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position]) {
     debug_assert_eq!(needs.len(), meta.len());
     debug_assert_eq!(needs.len(), positions.len());
 
     // 1. Build spatial grid index once per frame: O(N)
-    let mut grid = vec![Vec::with_capacity(32); GRID_SIZE * GRID_SIZE];
+    let mut grid = vec![Vec::with_capacity(16); GRID_SIZE * GRID_SIZE];
     for j in 0..positions.len() {
         // Skip sleeping agents since others won't socialize with them
         if (meta[j].archetype_flags & flags::SLEEPING) != 0 { continue; }
         
-        let cx = (positions[j].x / CELL_SIZE).max(0.0).min(19.9) as usize;
-        let cz = (positions[j].z / CELL_SIZE).max(0.0).min(19.9) as usize;
+        let cx = (positions[j].x / CELL_SIZE).max(0.0).min(99.9) as usize;
+        let cz = (positions[j].z / CELL_SIZE).max(0.0).min(99.9) as usize;
         grid[cx + cz * GRID_SIZE].push(j);
     }
 
@@ -49,17 +49,17 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position]) 
         // If already socializing, satisfy social ONLY when near another conscious agent
         else if (flags_i & flags::SOCIALIZING) != 0 {
             let pos_i = positions[i];
-            let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min(19.9) as isize;
-            let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min(19.9) as isize;
+            let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min(99.9) as isize;
+            let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min(99.9) as isize;
             
             let mut near_someone = false;
 
-            // Search in a 3x3 grid around agent for talking partners
+            // Search in a 3x3 grid around agent for talking partners (local 6x6 unit block)
             for dx_cell in -1..=1 {
                 for dz_cell in -1..=1 {
                     let cx = cx_i + dx_cell;
                     let cz = cz_i + dz_cell;
-                    if cx >= 0 && cx < 20 && cz >= 0 && cz < 20 {
+                    if cx >= 0 && cx < GRID_SIZE as isize && cz >= 0 && cz < GRID_SIZE as isize {
                         let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE;
                         for &j in &grid[cell_idx] {
                             if i == j { continue; }
