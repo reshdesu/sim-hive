@@ -21,3 +21,11 @@ pub fn init_simulation(count: u32) -> World {
 
     World::new(count)
 }
+
+/// Returns the WebAssembly.Memory object for this module.
+/// Used by the JS bridge to construct zero-copy TypedArray views
+/// over Wasm linear memory for Arrow IPC snapshot ingestion.
+#[wasm_bindgen]
+pub fn wasm_memory() -> JsValue {
+    wasm_bindgen::memory()
+}

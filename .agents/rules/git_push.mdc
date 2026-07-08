@@ -1,0 +1,12 @@
+---
+description: Rules regarding when to perform Git commits and pushes.
+globs: *
+---
+
+# Git Commit and Push Rules
+
+To ensure a clean and controlled version history and respect user preferences, the AI agent must strictly follow these rules:
+
+1. **No Auto-Committing/Pushing**: Never automatically run `git commit` or `git push` command sequences after making code changes.
+2. **Explicit User Approval Required**: Git commits and pushes must **ONLY** be executed when the user explicitly asks for a commit or push (e.g., "commit and push", "please push our progress", "save to git").
+3. **Keep Working Directory Free for Iteration**: Make, test, and refine changes locally within the workspace. Wait for the user's signal before committing the results.

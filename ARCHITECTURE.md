@@ -151,7 +151,7 @@ FROM agent_snapshots GROUP BY tick;
 | P0 | Verify COEP/COOP headers for `SharedArrayBuffer` | ⬜ Todo |
 | P1 | Archetype storage + basic movement system | ⬜ Todo |
 | P1 | Wasm memory → WebGPU instanced draw call | ⬜ Todo |
-| P2 | DuckDB-Wasm + Arrow IPC snapshot pipeline | ⬜ Todo |
+| P2 | DuckDB-Wasm + Arrow IPC snapshot pipeline | ✅ Done |
 | P3 | BehaviorDecisionSystem (needs → goal → action FSM) | ⬜ Todo |
 | P4 | SolidJS UI layer (population dashboard, vitals) | ⬜ Todo |
 
@@ -172,7 +172,7 @@ FROM agent_snapshots GROUP BY tick;
 
 *Next Actions for the next session:*
 - [ ] Upgrade rendering to PlayCanvas WebGPU mesh instancing (P1 performance milestone)
-- [ ] Integrate DuckDB-Wasm and Arrow IPC snapshots (P2 analytics milestone)
+- [x] Integrate DuckDB-Wasm and Arrow IPC snapshots (P2 analytics milestone)
 
 ---
 

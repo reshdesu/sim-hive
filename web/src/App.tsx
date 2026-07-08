@@ -4,6 +4,7 @@
 
 import { createSignal, onCleanup, type Component } from 'solid-js'
 import { simStats, isRunning, startSimulation, stopSimulation } from './sim-bridge'
+import { dbStatus, snapshotCount, vitalHistory } from './db-bridge'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const AGENT_COUNT = 1024
@@ -13,7 +14,7 @@ const ROADMAP = [
   { priority: 'p0', label: 'COEP/COOP headers (SharedArrayBuffer)', done: true },
   { priority: 'p1', label: 'Wasm memory → PlayCanvas instanced draw', done: true },
   { priority: 'p1', label: 'Archetype storage + movement system', done: true },
-  { priority: 'p2', label: 'DuckDB-Wasm + Arrow IPC snapshot', done: false },
+  { priority: 'p2', label: 'DuckDB-Wasm + Arrow IPC snapshot', done: true },
   { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: true }, // We already did the FSM in behavior.rs
   { priority: 'p4', label: 'Population dashboard (SolidJS)', done: true }, // Sidebar dashboard is also wired and complete!
 ]
@@ -238,7 +239,7 @@ const App: Component = () => {
           {[
             { label: 'Logic',      value: 'Rust → Wasm (wasm-pack)' },
             { label: 'Rendering',  value: 'PlayCanvas WebGPU' },
-            { label: 'State',      value: 'DuckDB-Wasm (P2)' },
+            { label: 'State',      value: 'DuckDB-Wasm ✓ active' },
             { label: 'UI',         value: 'SolidJS' },
             { label: 'Pattern',    value: 'ECS / Data-Oriented' },
           ].map(row => (
@@ -247,6 +248,74 @@ const App: Component = () => {
               <span style={{ color: 'var(--text-mid)', 'font-family': 'var(--font-mono)', 'font-size': '0.65rem' }}>{row.value}</span>
             </div>
           ))}
+        </section>
+
+        {/* DuckDB Analytics */}
+        <section class="panel" aria-labelledby="panel-db-title">
+          <div id="panel-db-title" class="panel__title">
+            DuckDB analytics
+            <span style={{
+              'margin-left': '8px',
+              'font-size': '0.6rem',
+              'font-family': 'var(--font-mono)',
+              color: dbStatus() === 'ready' ? 'var(--accent)' : dbStatus() === 'error' ? '#f85149' : 'var(--text-lo)',
+              'text-transform': 'uppercase',
+              'letter-spacing': '0.05em',
+            }}>
+              {dbStatus()}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', 'justify-content': 'space-between', 'margin-bottom': '8px' }}>
+            <span style={{ 'font-size': '0.68rem', color: 'var(--text-lo)' }}>Snapshots ingested</span>
+            <span id="db-snapshot-count" style={{ 'font-family': 'var(--font-mono)', 'font-size': '0.72rem', color: 'var(--text-mid)' }}>
+              {snapshotCount().toLocaleString()}
+            </span>
+          </div>
+
+          {/* Sparkline chart: hunger + energy over last N snapshots */}
+          {vitalHistory().length > 1 && (
+            <div style={{ 'margin-top': '6px' }}>
+              <div style={{ 'font-size': '0.62rem', color: 'var(--text-lo)', 'margin-bottom': '4px' }}>Population vitals (last {vitalHistory().length} ticks)</div>
+              <svg
+                id="db-vitals-chart"
+                width="100%"
+                height="60"
+                viewBox={`0 0 ${vitalHistory().length} 60`}
+                preserveAspectRatio="none"
+                style={{ display: 'block', 'border-radius': '4px', background: 'var(--bg-1)' }}
+                aria-label="Historical vitals sparkline"
+              >
+                {/* Hunger line — orange */}
+                <polyline
+                  points={vitalHistory().map((r, i) => `${i},${(1 - r.meanHunger) * 58 + 1}`).join(' ')}
+                  fill="none"
+                  stroke="#f5853d"
+                  stroke-width="0.8"
+                  stroke-linejoin="round"
+                />
+                {/* Energy line — cyan */}
+                <polyline
+                  points={vitalHistory().map((r, i) => `${i},${(1 - r.meanEnergy) * 58 + 1}`).join(' ')}
+                  fill="none"
+                  stroke="#1a9cff"
+                  stroke-width="0.8"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <div style={{ display: 'flex', gap: '10px', 'margin-top': '4px' }}>
+                <span style={{ 'font-size': '0.58rem', color: '#f5853d' }}>■ Hunger</span>
+                <span style={{ 'font-size': '0.58rem', color: '#1a9cff' }}>■ Energy</span>
+              </div>
+            </div>
+          )}
+
+          {vitalHistory().length <= 1 && dbStatus() === 'ready' && (
+            <p style={{ 'font-size': '0.62rem', color: 'var(--text-lo)', 'margin-top': '4px' }}>Waiting for first snapshot…</p>
+          )}
+          {dbStatus() !== 'ready' && dbStatus() !== 'error' && (
+            <p style={{ 'font-size': '0.62rem', color: 'var(--text-lo)', 'margin-top': '4px' }}>Initialises when simulation starts</p>
+          )}
         </section>
 
         {/* Roadmap */}

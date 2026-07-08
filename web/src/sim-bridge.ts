@@ -7,6 +7,7 @@
 
 import { createSignal } from 'solid-js'
 import * as pc from 'playcanvas'
+import { initDb, snapshotTick, closeDb } from './db-bridge'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,10 +57,8 @@ let washMaterial: pc.StandardMaterial | null = null
 async function loadWasm() {
   if (!wasmMod) {
     wasmMod = await import('@sim-core')
-    const exports = await (wasmMod as any).default?.()
-    if (exports && exports.memory) {
-      wasmMemory = exports.memory
-    }
+    // Initialise the wasm module (required for --target web bundles)
+    await (wasmMod as any).default?.()
   }
   return wasmMod
 }
@@ -311,7 +310,13 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
   // 1. Initialise the Wasm ECS World
   world = mod.init_simulation(agentCount)
 
-  // 2. Initialise the PlayCanvas renderer
+  // Grab the WebAssembly.Memory handle via the canonical wasm_bindgen export
+  wasmMemory = (mod as any).wasm_memory() as WebAssembly.Memory
+
+  // 2. Initialise DuckDB-Wasm snapshot pipeline (non-blocking)
+  initDb().catch(e => console.warn('[sim-bridge] DuckDB init failed:', e))
+
+  // 3. Initialise the PlayCanvas renderer
   initPlayCanvas(canvas)
   clearAgents()
   initInstancing(agentCount)
@@ -378,6 +383,18 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
         avgSocial,
         avgHygiene,
       })
+
+      // ── DuckDB snapshot (every 60 frames, async — non-blocking) ─────────
+      if (wasmMemory) {
+        snapshotTick(
+          wasmMemory,
+          Number(tick),
+          agentCount,
+          world.positions_ptr(),
+          world.needs_ptr(),
+          world.meta_ptr(),
+        ).catch(e => console.warn('[sim-bridge] DuckDB snapshot failed:', e))
+      }
     }
 
     // ── Zero-copy Wasm ↔ PlayCanvas update ──────────────────────────────────
@@ -429,6 +446,7 @@ export function stopSimulation() {
   }
   setIsRunning(false)
   clearAgents()
+  closeDb().catch(() => {})
 }
 
 export function toggleSimulation(canvas: HTMLCanvasElement) {

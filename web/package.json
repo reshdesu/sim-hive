@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev57.0",
+    "apache-arrow": "^17.0.0",
     "playcanvas": "^2.20.5",
     "solid-js": "^1.9.13"
   },
