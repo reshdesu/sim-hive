@@ -48,9 +48,7 @@ jobs:
           wasm-pack build --target web --out-dir pkg
 
       - name: Build Web application
-        run: |
-          cd web
-          pnpm run build
+        run: pnpm --filter sim-hive-web build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
