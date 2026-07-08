@@ -127,6 +127,47 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   camera.lookAt(150, 0, 95)
   app.root.addChild(camera)
 
+  // ── Raycasting for Agent Inspector ─────────────────────────────────────────
+  app!.mouse!.on(pc.EVENT_MOUSEDOWN, (e: pc.MouseEvent) => {
+    if (e.button !== pc.MOUSEBUTTON_LEFT || !wasmMemory || !world || !isRunning()) return
+
+    const pos = new pc.Vec3()
+    camera.camera!.screenToWorld(e.x, e.y, camera.camera!.farClip, pos)
+
+    const origin = camera.getPosition()
+    const dir = new pc.Vec3().sub2(pos, origin).normalize()
+
+    // Ray-plane intersection with y = 0 plane
+    if (dir.y >= 0) return // Clicked above the horizon
+    const t = -origin.y / dir.y
+    const hitX = origin.x + dir.x * t
+    const hitZ = origin.z + dir.z * t
+
+    const agentCount = world.agent_count()
+    const posPtr = world.positions_ptr()
+    const posF32 = new Float32Array(wasmMemory.buffer, posPtr, agentCount * 4)
+
+    let closestId = -1
+    let closestDistSq = Infinity
+    const radiusSq = 9.0 // 3.0 units radius
+
+    for (let i = 0; i < agentCount; i++) {
+      const dx = posF32[i * 4] - hitX
+      const dz = posF32[i * 4 + 2] - hitZ
+      const distSq = dx * dx + dz * dz
+      if (distSq < radiusSq && distSq < closestDistSq) {
+        closestDistSq = distSq
+        closestId = i
+      }
+    }
+
+    if (closestId !== -1) {
+      setSelectedAgentId(closestId)
+    } else {
+      setSelectedAgentId(null)
+    }
+  })
+
   // 2. Set up Directional Light
   const light = new pc.Entity('light')
   light.addComponent('light', {
@@ -387,8 +428,56 @@ export const [simStats, setSimStats] = createSignal<SimStats>({
   avgHygiene: 0.9,
 })
 
+export interface AgentDetails {
+  id: number
+  age: number
+  householdId: number
+  flags: number
+  hunger: number
+  energy: number
+  social: number
+  hygiene: number
+}
+
+export const [selectedAgentId, setSelectedAgentId] = createSignal<number | null>(null)
+export const [selectedAgentDetails, setSelectedAgentDetails] = createSignal<AgentDetails | null>(null)
 export const [isRunning, setIsRunning] = createSignal(false)
 export const [isInitializing, setIsInitializing] = createSignal(false)
+
+export function getSelectedAgentDetails(id = selectedAgentId()): AgentDetails | null {
+  if (id === null || !wasmMemory || !world) return null
+
+  // Meta is array of AgentMeta (12 bytes per struct)
+  // [entity_id: u32, archetype_flags: u32, age: u16, household_id: u16]
+  const metaPtr = world.meta_ptr()
+  const metaU32 = new Uint32Array(wasmMemory.buffer, metaPtr, world.agent_count() * 3)
+  const metaU16 = new Uint16Array(wasmMemory.buffer, metaPtr, world.agent_count() * 6)
+
+  const flags = metaU32[id * 3 + 1]
+  const age = metaU16[id * 6 + 4]
+  const householdId = metaU16[id * 6 + 5]
+
+  // Needs is array of Needs (16 bytes per struct)
+  // [hunger: f32, energy: f32, social: f32, hygiene: f32]
+  const needsPtr = world.needs_ptr()
+  const needsF32 = new Float32Array(wasmMemory.buffer, needsPtr, world.agent_count() * 4)
+
+  const hunger = needsF32[id * 4]
+  const energy = needsF32[id * 4 + 1]
+  const social = needsF32[id * 4 + 2]
+  const hygiene = needsF32[id * 4 + 3]
+
+  return {
+    id,
+    age,
+    householdId,
+    flags,
+    hunger,
+    energy,
+    social,
+    hygiene,
+  }
+}
 
 /**
  * Initialise the simulation with `agentCount` agents and attach it to
@@ -479,6 +568,13 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
         avgSocial,
         avgHygiene,
       })
+
+      // ── Selected Agent Inspector ──────────────────────────────────────────
+      if (selectedAgentId() !== null) {
+        setSelectedAgentDetails(getSelectedAgentDetails())
+      } else {
+        setSelectedAgentDetails(null)
+      }
 
       // ── DuckDB snapshot (every 60 frames, async — non-blocking) ─────────
       if (wasmMemory) {

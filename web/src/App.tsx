@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────── */
 
 import { createSignal, onCleanup, type Component } from 'solid-js'
-import { simStats, isRunning, isInitializing, setIsInitializing, startSimulation, stopSimulation } from './sim-bridge'
+import { simStats, isRunning, isInitializing, setIsInitializing, selectedAgentDetails, startSimulation, stopSimulation } from './sim-bridge'
 import { dbStatus, snapshotCount, vitalHistory } from './db-bridge'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ const ROADMAP = [
   { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: true },
   { priority: 'p4', label: 'Population dashboard (SolidJS)', done: true },
   { priority: 'p5', label: 'Buildings & Destinations (Spatial Zones)', done: true },
-  { priority: 'p6', label: 'Agent Inspector (Raycasting & UI)', done: false },
+  { priority: 'p6', label: 'Agent Inspector (Raycasting & UI)', done: true },
   { priority: 'p7', label: 'Day / Night Cycle (Time-based logic)', done: false },
 ]
 
@@ -45,6 +45,15 @@ const App: Component = () => {
 
   // ── Derived display helpers ────────────────────────────────────────────────
   const stats = () => simStats()
+
+  // Helper to decode state from flags bitmask
+  const getStateName = (flags: number) => {
+    if (flags & (1 << 3)) return 'Sleeping'
+    if (flags & (1 << 4)) return 'Eating'
+    if (flags & (1 << 1)) return 'Socializing'
+    if (flags & (1 << 2)) return 'Working / Hygiene'
+    return 'Wandering'
+  }
 
   return (
     <div class="layout fade-in">
@@ -178,6 +187,79 @@ const App: Component = () => {
             </div>
           </div>
         </section>
+
+        {/* Selected Agent Inspector */}
+        {selectedAgentDetails() && (
+          <section class="panel" style={{ border: '1px solid var(--primary)', background: 'rgba(0, 204, 255, 0.05)' }}>
+            <div class="panel__title" style={{ color: 'var(--primary)' }}>Agent Inspector</div>
+            
+            <div style={{ display: 'flex', 'justify-content': 'space-between', 'margin-bottom': '12px' }}>
+              <div>
+                <div style={{ 'font-size': '0.65rem', color: 'var(--text-lo)' }}>Entity ID</div>
+                <div style={{ 'font-size': '0.9rem', color: 'var(--text-hi)', 'font-family': 'var(--font-mono)' }}>
+                  #{selectedAgentDetails()!.id}
+                </div>
+              </div>
+              <div>
+                <div style={{ 'font-size': '0.65rem', color: 'var(--text-lo)' }}>Status</div>
+                <div style={{ 'font-size': '0.8rem', color: 'var(--text-mid)' }}>
+                  {getStateName(selectedAgentDetails()!.flags)}
+                </div>
+              </div>
+              <div style={{ 'text-align': 'right' }}>
+                <div style={{ 'font-size': '0.65rem', color: 'var(--text-lo)' }}>Age / Household</div>
+                <div style={{ 'font-size': '0.8rem', color: 'var(--text-mid)' }}>
+                  {selectedAgentDetails()!.age}y / #{selectedAgentDetails()!.householdId}
+                </div>
+              </div>
+            </div>
+
+            <div class="vital-row">
+              <div class="vital-row__label">
+                <span>Hunger</span>
+                <span style={{ 'font-family': 'var(--font-mono)', 'font-size': '0.65rem' }}>
+                  {Math.round(selectedAgentDetails()!.hunger * 100)}%
+                </span>
+              </div>
+              <div class="vital-bar">
+                <div class="vital-bar__fill vital-bar__fill--hunger" style={{ width: `${selectedAgentDetails()!.hunger * 100}%` }} />
+              </div>
+            </div>
+            <div class="vital-row">
+              <div class="vital-row__label">
+                <span>Energy</span>
+                <span style={{ 'font-family': 'var(--font-mono)', 'font-size': '0.65rem' }}>
+                  {Math.round(selectedAgentDetails()!.energy * 100)}%
+                </span>
+              </div>
+              <div class="vital-bar">
+                <div class="vital-bar__fill vital-bar__fill--energy" style={{ width: `${selectedAgentDetails()!.energy * 100}%` }} />
+              </div>
+            </div>
+            <div class="vital-row">
+              <div class="vital-row__label">
+                <span>Social</span>
+                <span style={{ 'font-family': 'var(--font-mono)', 'font-size': '0.65rem' }}>
+                  {Math.round(selectedAgentDetails()!.social * 100)}%
+                </span>
+              </div>
+              <div class="vital-bar">
+                <div class="vital-bar__fill vital-bar__fill--social" style={{ width: `${selectedAgentDetails()!.social * 100}%` }} />
+              </div>
+            </div>
+            <div class="vital-row">
+              <div class="vital-row__label">
+                <span>Hygiene</span>
+                <span style={{ 'font-family': 'var(--font-mono)', 'font-size': '0.65rem' }}>
+                  {Math.round(selectedAgentDetails()!.hygiene * 100)}%
+                </span>
+              </div>
+              <div class="vital-bar">
+                <div class="vital-bar__fill vital-bar__fill--hygiene" style={{ width: `${selectedAgentDetails()!.hygiene * 100}%` }} />
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Population vitals */}
         <section class="panel" aria-labelledby="panel-vitals-title">
