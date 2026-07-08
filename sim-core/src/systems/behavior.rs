@@ -10,8 +10,9 @@ use crate::components::{Needs, AgentMeta, Position, flags, Building, building_ty
 const CRITICAL: f32 = 0.25;
 const SATISFIED: f32 = 0.95;
 
-const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
-const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
+const GRID_SIZE_X: usize = 150; // Widescreen 300x200
+const GRID_SIZE_Z: usize = 100;
+const CELL_SIZE: f32 = 2.0;
 
 pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], grid: &[Vec<usize>], buildings: &[Building]) {
     debug_assert_eq!(needs.len(), meta.len());
@@ -72,8 +73,8 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], 
                 for dz_cell in -1..=1 {
                     let cx = cx_i + dx_cell;
                     let cz = cz_i + dz_cell;
-                    if cx >= 0 && cx < GRID_SIZE as isize && cz >= 0 && cz < GRID_SIZE as isize {
-                        let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE;
+                    if cx >= 0 && cx < GRID_SIZE_X as isize && cz >= 0 && cz < GRID_SIZE_Z as isize {
+                        let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE_X;
                         for &j in &grid[cell_idx] {
                             if i == j { continue; }
                             let dx = positions[j].x - pos_i.x;

@@ -123,8 +123,8 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
     clearColor: new pc.Color(0.06, 0.08, 0.1, 1.0), // Deep space blue background
     farClip: 1000,
   })
-  camera.setPosition(100, 110, 220)
-  camera.lookAt(100, 0, 100)
+  camera.setPosition(150, 195, 230)
+  camera.lookAt(150, 0, 95)
   app.root.addChild(camera)
 
   // 2. Set up Directional Light
@@ -179,7 +179,7 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
 
   const groundMaterial = new pc.StandardMaterial()
   groundMaterial.diffuseMap = gridTexture
-  groundMaterial.diffuseMapTiling = new pc.Vec2(20, 20) // Tile 20x20 times for a 200x200 grid scale
+  groundMaterial.diffuseMapTiling = new pc.Vec2(30, 20) // Tile 30x20 times for a 300x200 grid scale
   groundMaterial.specular = new pc.Color(0.0, 0.0, 0.0)
   groundMaterial.useLighting = true
   groundMaterial.update()
@@ -188,8 +188,8 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   ground.addComponent('render', {
     type: 'plane',
   })
-  ground.setPosition(100, -0.5, 100)
-  ground.setLocalScale(20, 1, 20) // scale from default 10x10 plane to 200x200
+  ground.setPosition(150, -0.5, 100)
+  ground.setLocalScale(300, 1, 200) // scale from default 10x10 plane to 300x200
   ground.render!.material = groundMaterial
   app.root.addChild(ground)
 

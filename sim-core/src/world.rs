@@ -42,7 +42,7 @@ impl World {
                 let row = (i as u32) / side;
                 let col = (i as u32) % side;
                 Position {
-                    x: (col + 1) as f32 * spacing,
+                    x: (col + 1) as f32 * spacing * 1.5,
                     y: 0.0,
                     z: (row + 1) as f32 * spacing,
                     _pad: 0.0,
@@ -89,7 +89,7 @@ impl World {
             vec![0.0; n * 16], // Wash
         ];
         let state_counts = vec![0; 5];
-        let grid = vec![Vec::with_capacity(16); 100 * 100];
+        let grid = vec![Vec::with_capacity(16); 150 * 100];
 
         let mut buildings: Vec<Building> = Vec::new();
         let num_houses = (n as u16 / 4).max(1);
@@ -101,7 +101,7 @@ impl World {
             for i in 0..count {
                 for attempt in 0..10_000 {
                     let h = seed_hash((btype as u64) ^ (i as u64) ^ (attempt as u64) ^ 0xABCD);
-                    let x = 15.0 + (h % 170) as f32;
+                    let x = 15.0 + (h % 270) as f32;
                     let z = 15.0 + ((h >> 10) % 170) as f32;
                     
                     let mut overlap = false;
@@ -169,15 +169,16 @@ impl World {
             cell.clear();
         }
 
-        const GRID_SIZE: usize = 100;
+        const GRID_SIZE_X: usize = 150;
+        const GRID_SIZE_Z: usize = 100;
         const CELL_SIZE: f32 = 2.0;
 
         for (j, (pos, m)) in self.positions.iter().zip(self.meta.iter()).enumerate() {
             if (m.archetype_flags & flags::SLEEPING) != 0 { continue; }
 
-            let cx = (pos.x / CELL_SIZE).max(0.0).min(99.9) as usize;
+            let cx = (pos.x / CELL_SIZE).max(0.0).min(149.9) as usize;
             let cz = (pos.z / CELL_SIZE).max(0.0).min(99.9) as usize;
-            self.grid[cx + cz * GRID_SIZE].push(j);
+            self.grid[cx + cz * GRID_SIZE_X].push(j);
         }
     }
 

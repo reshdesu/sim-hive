@@ -180,22 +180,7 @@ body { min-height: 100dvh; overflow: hidden; }
   );
 }
 
-/* Floating control bar */
-.canvas-controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(16px);
-  padding: 8px 16px;
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
+
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────── */
 .btn {

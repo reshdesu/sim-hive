@@ -11,11 +11,13 @@ use crate::components::{Position, Velocity, AgentMeta, flags, Building, building
 /// Step size per tick for the random walk.
 const STEP: f32 = 0.05;
 
-const WORLD_SIZE: f32 = 200.0;
+const WORLD_SIZE_X: f32 = 300.0;
+const WORLD_SIZE_Z: f32 = 200.0;
 const STEER_DIST: f32 = 15.0;
 
-const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
-const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
+const GRID_SIZE_X: usize = 150; // Widescreen 300x200
+const GRID_SIZE_Z: usize = 100;
+const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell
 
 pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocity], grid: &[Vec<usize>], buildings: &[Building], tick: u64) {
     debug_assert_eq!(positions.len(), velocities.len());
@@ -70,8 +72,8 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
             // Only recalculate target path every 15 frames per agent to stagger CPU workload
             if (tick + i as u64) % 15 == 0 || vel.speed == 0.0 {
                 let pos_i = positions[i];
-                let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min(99.9) as isize;
-                let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min(99.9) as isize;
+                let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min((GRID_SIZE_X - 1) as f32) as isize;
+                let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min((GRID_SIZE_Z - 1) as f32) as isize;
                 
                 let mut nearest_idx = None;
                 let mut min_dist_sq = f32::MAX;
@@ -81,8 +83,8 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
                     for dz_cell in -1..=1 {
                         let cx = cx_i + dx_cell;
                         let cz = cz_i + dz_cell;
-                        if cx >= 0 && cx < GRID_SIZE as isize && cz >= 0 && cz < GRID_SIZE as isize {
-                            let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE;
+                        if cx >= 0 && cx < GRID_SIZE_X as isize && cz >= 0 && cz < GRID_SIZE_Z as isize {
+                            let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE_X;
                             for &j in &grid[cell_idx] {
                                 if i == j { continue; }
                                 let dx = positions[j].x - pos_i.x;
@@ -104,8 +106,8 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
                             if dx_cell >= -1 && dx_cell <= 1 && dz_cell >= -1 && dz_cell <= 1 { continue; }
                             let cx = cx_i + dx_cell;
                             let cz = cz_i + dz_cell;
-                            if cx >= 0 && cx < GRID_SIZE as isize && cz >= 0 && cz < GRID_SIZE as isize {
-                                let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE;
+                            if cx >= 0 && cx < GRID_SIZE_X as isize && cz >= 0 && cz < GRID_SIZE_Z as isize {
+                                let cell_idx = (cx as usize) + (cz as usize) * GRID_SIZE_X;
                                 for &j in &grid[cell_idx] {
                                     if i == j { continue; }
                                     let dx = positions[j].x - pos_i.x;
@@ -144,12 +146,12 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
                     // Fallback to normal random walk
                     let pos = positions[i];
                     let near_boundary = pos.x < STEER_DIST
-                        || pos.x > (WORLD_SIZE - STEER_DIST)
+                        || pos.x > (WORLD_SIZE_X - STEER_DIST)
                         || pos.z < STEER_DIST
-                        || pos.z > (WORLD_SIZE - STEER_DIST);
+                        || pos.z > (WORLD_SIZE_Z - STEER_DIST);
 
                     let angle = if near_boundary {
-                        let dx = 100.0 - pos.x;
+                        let dx = 150.0 - pos.x;
                         let dz = 100.0 - pos.z;
                         dz.atan2(dx)
                     } else {
@@ -167,12 +169,12 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
                 // Staggered frame: maintain current direction, but still apply boundary steering
                 let pos = positions[i];
                 let near_boundary = pos.x < STEER_DIST
-                    || pos.x > (WORLD_SIZE - STEER_DIST)
+                    || pos.x > (WORLD_SIZE_X - STEER_DIST)
                     || pos.z < STEER_DIST
-                    || pos.z > (WORLD_SIZE - STEER_DIST);
+                    || pos.z > (WORLD_SIZE_Z - STEER_DIST);
 
                 if near_boundary {
-                    let dx = 100.0 - pos.x;
+                    let dx = 150.0 - pos.x;
                     let dz = 100.0 - pos.z;
                     let angle = dz.atan2(dx);
                     vel.dx    = angle.cos() * STEP;
@@ -188,13 +190,13 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
             
             // Check if agent is close to any boundary
             let near_boundary = pos.x < STEER_DIST
-                || pos.x > (WORLD_SIZE - STEER_DIST)
+                || pos.x > (WORLD_SIZE_X - STEER_DIST)
                 || pos.z < STEER_DIST
-                || pos.z > (WORLD_SIZE - STEER_DIST);
+                || pos.z > (WORLD_SIZE_Z - STEER_DIST);
 
             let angle = if near_boundary {
-                // Steer back towards center of the map (100, 100)
-                let dx = 100.0 - pos.x;
+                // Steer back towards center of the map (150, 100)
+                let dx = 150.0 - pos.x;
                 let dz = 100.0 - pos.z;
                 dz.atan2(dx)
             } else {

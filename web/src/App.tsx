@@ -60,6 +60,45 @@ const App: Component = () => {
 
         <div class="header__spacer" />
 
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', 'margin-right': '10px' }}>
+          <label style={{ 'font-size': '0.72rem', color: 'var(--text-mid)' }}>
+            Agents:
+          </label>
+          <input
+            id="agent-count"
+            type="number"
+            min={64}
+            max={8192}
+            step={64}
+            value={agentInput()}
+            disabled={isRunning()}
+            onInput={(e) => setAgentInput(Number((e.target as HTMLInputElement).value))}
+            style={{
+              width: '72px',
+              background: 'var(--bg-2)',
+              border: '1px solid var(--glass-border)',
+              'border-radius': 'var(--radius-sm)',
+              color: 'var(--text-hi)',
+              padding: '4px 8px',
+              'font-family': 'var(--font-mono)',
+              'font-size': '0.78rem',
+            }}
+          />
+
+          {!isRunning()
+            ? (
+              <button id="btn-start" class="btn btn--primary" onClick={handleStart} style={{ padding: '5px 12px', 'font-size': '0.75rem' }}>
+                ▶ Start
+              </button>
+            )
+            : (
+              <button id="btn-stop" class="btn btn--ghost" onClick={handleStop} style={{ padding: '5px 12px', 'font-size': '0.75rem' }}>
+                ■ Stop
+              </button>
+            )
+          }
+        </div>
+
         <span class={`chip ${isRunning() ? 'chip--active' : ''}`}>
           <span class="chip__dot" />
           {isRunning() ? 'Simulating' : 'Idle'}
@@ -101,45 +140,6 @@ const App: Component = () => {
           </div>
         )}
 
-        {/* Floating controls */}
-        <div class="canvas-controls" role="toolbar" aria-label="Simulation controls">
-          <label style={{ 'font-size': '0.72rem', color: 'var(--text-mid)' }}>
-            Agents:
-          </label>
-          <input
-            id="agent-count"
-            type="number"
-            min={64}
-            max={8192}
-            step={64}
-            value={agentInput()}
-            disabled={isRunning()}
-            onInput={(e) => setAgentInput(Number((e.target as HTMLInputElement).value))}
-            style={{
-              width: '72px',
-              background: 'var(--bg-2)',
-              border: '1px solid var(--glass-border)',
-              'border-radius': 'var(--radius-sm)',
-              color: 'var(--text-hi)',
-              padding: '4px 8px',
-              'font-family': 'var(--font-mono)',
-              'font-size': '0.78rem',
-            }}
-          />
-
-          {!isRunning()
-            ? (
-              <button id="btn-start" class="btn btn--primary" onClick={handleStart}>
-                ▶ Start
-              </button>
-            )
-            : (
-              <button id="btn-stop" class="btn btn--ghost" onClick={handleStop}>
-                ■ Stop
-              </button>
-            )
-          }
-        </div>
       </main>
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
