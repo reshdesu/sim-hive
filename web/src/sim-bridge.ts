@@ -193,6 +193,31 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   ground.render!.material = groundMaterial
   app.root.addChild(ground)
 
+  // 3b. Add Spatial Zone indicators
+  function createZonePlane(name: string, x: number, z: number, w: number, d: number, color: pc.Color) {
+    const zoneMat = new pc.StandardMaterial()
+    zoneMat.diffuse = color
+    zoneMat.emissive = color
+    zoneMat.opacity = 0.1
+    zoneMat.blendType = pc.BLEND_NORMAL
+    zoneMat.useLighting = false
+    zoneMat.update()
+    
+    const zone = new pc.Entity(`zone-${name}`)
+    zone.addComponent('render', { type: 'plane' })
+    zone.setPosition(x, -0.4, z)
+    zone.setLocalScale(w, 1, d)
+    zone.render!.material = zoneMat
+    app!.root.addChild(zone)
+  }
+
+  // Left Suburbs
+  createZonePlane('left-suburb', 55, 100, 90, 180, new pc.Color(0.2, 0.4, 0.6))
+  // Right Suburbs
+  createZonePlane('right-suburb', 245, 100, 90, 180, new pc.Color(0.2, 0.4, 0.6))
+  // Downtown
+  createZonePlane('downtown', 150, 100, 60, 140, new pc.Color(0.5, 0.5, 0.5))
+
   // 4. Create state-specific materials for agents, matching the UI vital bars
   
   // Normal / Wandering state: neon neutral white (does not match any vital color)

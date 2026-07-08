@@ -98,12 +98,14 @@ impl World {
         let num_food = (n / 30).max(1).min(30);
         
         // Lay out buildings organically but prevent overlapping
-        let mut add_buildings = |btype, w: f32, d: f32, count: u32| {
+        let mut add_buildings = |btype, w: f32, d: f32, count: u32, x_min: f32, x_max: f32, z_min: f32, z_max: f32| {
             for i in 0..count {
                 for attempt in 0..10_000 {
                     let h = seed_hash((btype as u64) ^ (i as u64) ^ (attempt as u64) ^ 0xABCD);
-                    let x = 15.0 + (h % 270) as f32;
-                    let z = 15.0 + ((h >> 10) % 170) as f32;
+                    let x_range = x_max - x_min;
+                    let z_range = z_max - z_min;
+                    let x = x_min + (h % (x_range as u64)) as f32;
+                    let z = z_min + ((h >> 10) % (z_range as u64)) as f32;
                     
                     let mut overlap = false;
                     for b in &buildings {
@@ -123,9 +125,18 @@ impl World {
             }
         };
 
-        add_buildings(building_type::HOUSE, 4.0, 4.0, num_houses as u32);
-        add_buildings(building_type::WORKPLACE, 10.0, 10.0, num_workplaces as u32);
-        add_buildings(building_type::FOOD, 6.0, 6.0, num_food as u32);
+        // Zone 1: Left Suburbs (Houses)
+        let half_houses = num_houses / 2;
+        add_buildings(building_type::HOUSE, 4.0, 4.0, half_houses as u32, 10.0, 100.0, 10.0, 190.0);
+        
+        // Zone 2: Right Suburbs (Houses)
+        add_buildings(building_type::HOUSE, 4.0, 4.0, (num_houses - half_houses) as u32, 200.0, 290.0, 10.0, 190.0);
+        
+        // Zone 3: Downtown / Commercial (Workplaces)
+        add_buildings(building_type::WORKPLACE, 12.0, 12.0, num_workplaces as u32, 120.0, 180.0, 30.0, 170.0);
+        
+        // Zone 4: Markets / Food (Bordering downtown and suburbs)
+        add_buildings(building_type::FOOD, 6.0, 6.0, num_food as u32, 100.0, 200.0, 15.0, 185.0);
 
         let mut world = Self {
             count,
