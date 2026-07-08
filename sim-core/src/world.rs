@@ -92,9 +92,10 @@ impl World {
         let grid = vec![Vec::with_capacity(16); 150 * 100];
 
         let mut buildings: Vec<Building> = Vec::new();
-        let num_houses = (n as u16 / 4).max(1);
-        let num_workplaces = (n / 50).max(1);
-        let num_food = (n / 30).max(1);
+        // Cap buildings to reasonable maximums for a 300x200 world
+        let num_houses = (n / 4).max(1).min(100);
+        let num_workplaces = (n / 50).max(1).min(20);
+        let num_food = (n / 30).max(1).min(30);
         
         // Lay out buildings organically but prevent overlapping
         let mut add_buildings = |btype, w: f32, d: f32, count: u32| {

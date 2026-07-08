@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────── */
 
 import { createSignal, onCleanup, type Component } from 'solid-js'
-import { simStats, isRunning, startSimulation, stopSimulation } from './sim-bridge'
+import { simStats, isRunning, isInitializing, setIsInitializing, startSimulation, stopSimulation } from './sim-bridge'
 import { dbStatus, snapshotCount, vitalHistory } from './db-bridge'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ const App: Component = () => {
     try {
       await startSimulation(canvasRef, agentInput())
     } catch (e: any) {
+      setIsInitializing(false)
       setWasmError(String(e?.message ?? e))
       console.error('[sim-hive] Wasm init failed:', e)
     }
@@ -71,7 +72,7 @@ const App: Component = () => {
             max={8192}
             step={64}
             value={agentInput()}
-            disabled={isRunning()}
+            disabled={isRunning() || isInitializing()}
             onInput={(e) => setAgentInput(Number((e.target as HTMLInputElement).value))}
             style={{
               width: '72px',
@@ -87,8 +88,8 @@ const App: Component = () => {
 
           {!isRunning()
             ? (
-              <button id="btn-start" class="btn btn--primary" onClick={handleStart} style={{ padding: '5px 12px', 'font-size': '0.75rem' }}>
-                ▶ Start
+              <button id="btn-start" class="btn btn--primary" onClick={handleStart} disabled={isInitializing()} style={{ padding: '5px 12px', 'font-size': '0.75rem' }}>
+                {isInitializing() ? '⏳ Init...' : '▶ Start'}
               </button>
             )
             : (
@@ -101,7 +102,7 @@ const App: Component = () => {
 
         <span class={`chip ${isRunning() ? 'chip--active' : ''}`}>
           <span class="chip__dot" />
-          {isRunning() ? 'Simulating' : 'Idle'}
+          {isRunning() ? 'Simulating' : isInitializing() ? 'Allocating...' : 'Idle'}
         </span>
 
         <span class="chip">
@@ -135,7 +136,9 @@ const App: Component = () => {
             <span class="canvas-placeholder__text">
               {wasmError()
                 ? `⚠ ${wasmError()}`
-                : 'Press Start to launch simulation'}
+                : isInitializing()
+                  ? 'Allocating Wasm Memory...'
+                  : 'Press Start to launch simulation'}
             </span>
           </div>
         )}

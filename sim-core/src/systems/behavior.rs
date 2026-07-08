@@ -63,8 +63,8 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], 
         // If already socializing, satisfy social ONLY when near another conscious agent
         else if (flags_i & flags::SOCIALIZING) != 0 {
             let pos_i = positions[i];
-            let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min(99.9) as isize;
-            let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min(99.9) as isize;
+            let cx_i = (pos_i.x / CELL_SIZE).max(0.0).min((GRID_SIZE_X - 1) as f32) as isize;
+            let cz_i = (pos_i.z / CELL_SIZE).max(0.0).min((GRID_SIZE_Z - 1) as f32) as isize;
             
             let mut near_someone = false;
 

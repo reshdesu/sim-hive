@@ -363,12 +363,17 @@ export const [simStats, setSimStats] = createSignal<SimStats>({
 })
 
 export const [isRunning, setIsRunning] = createSignal(false)
+export const [isInitializing, setIsInitializing] = createSignal(false)
 
 /**
  * Initialise the simulation with `agentCount` agents and attach it to
  * the given canvas element (PlayCanvas renderer).
  */
 export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 1024) {
+  setIsInitializing(true)
+  // Yield to browser so UI can show loading state before heavy Wasm init
+  await new Promise(resolve => setTimeout(resolve, 50))
+  
   const mod = await loadWasm()
 
   // 1. Initialise the Wasm ECS World
@@ -396,6 +401,7 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
     avgHygiene: 0.9,
   })
   setIsRunning(true)
+  setIsInitializing(false)
 
   function loop(now: number) {
     const dt = now - lastTime

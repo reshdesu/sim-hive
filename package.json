@@ -4,7 +4,7 @@
   "private": true,
   "description": "High-performance browser-based life simulation — Rust/Wasm + PlayCanvas + SolidJS",
   "scripts": {
-    "build:wasm": "source $HOME/.cargo/env && cd sim-core && wasm-pack build --target web --out-dir pkg",
+    "build:wasm": ". $HOME/.cargo/env && cd sim-core && wasm-pack build --target web --out-dir pkg",
     "dev": "pnpm build:wasm && pnpm --filter sim-hive-web dev",
     "dev:web": "pnpm --filter sim-hive-web dev",
     "build": "pnpm build:wasm && pnpm --filter sim-hive-web build",
