@@ -179,6 +179,25 @@ const App: Component = () => {
                 {stats().agentCount.toLocaleString()}
               </div>
             </div>
+
+            {/* Time of Day */}
+            <div class="stat-card">
+              <div class="stat-card__label">Time</div>
+              <div class="stat-card__value" style={{ color: 'var(--accent)', 'font-size': '0.85rem' }}>
+                {(() => {
+                  const t = stats().timeOfDay || 0;
+                  const totalMinutes = t * 24 * 60;
+                  const hours = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+                  const minutes = Math.floor(totalMinutes % 60).toString().padStart(2, '0');
+                  
+                  let label = "Day";
+                  if (t < 0.25 || t > 0.75) label = "Night";
+
+                  return `${hours}:${minutes} (${label})`;
+                })()}
+              </div>
+            </div>
+
             <div class="stat-card">
               <div class="stat-card__label">Engine</div>
               <div class="stat-card__value" style={{ 'font-size': '0.72rem', color: 'var(--text-mid)' }}>

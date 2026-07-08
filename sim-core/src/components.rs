@@ -62,6 +62,7 @@ pub mod flags {
     pub const IN_BUILDING: u32   = 1 << 2;
     pub const SLEEPING: u32      = 1 << 3;
     pub const EATING: u32        = 1 << 4;
+    pub const NIGHT_SHIFT: u32   = 1 << 5;
 }
 
 /// A static Point of Interest (Building) in the world.

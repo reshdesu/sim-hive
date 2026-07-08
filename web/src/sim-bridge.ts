@@ -15,6 +15,14 @@ export interface SimStats {
   tick: number
   fps: number
   agentCount: number
+  timeOfDay: number
+  stateCounts: {
+    walking: number
+    sleeping: number
+    eating: number
+    socializing: number
+    washing: number
+  }
   avgHunger: number
   avgEnergy: number
   avgSocial: number
@@ -57,6 +65,9 @@ let washMaterial: pc.StandardMaterial | null = null
 let houseMaterial: pc.StandardMaterial | null = null
 let workMaterial: pc.StandardMaterial | null = null
 let foodMaterial: pc.StandardMaterial | null = null
+let mainCamera: pc.Entity | null = null
+let mainLight: pc.Entity | null = null
+let selectionMarker: pc.Entity | null = null
 
 // ── Wasm Loader ──────────────────────────────────────────────────────────────
 
@@ -118,23 +129,23 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   })
 
   // 1. Set up Camera
-  const camera = new pc.Entity('camera')
-  camera.addComponent('camera', {
+  mainCamera = new pc.Entity('camera')
+  mainCamera.addComponent('camera', {
     clearColor: new pc.Color(0.06, 0.08, 0.1, 1.0), // Deep space blue background
     farClip: 1000,
   })
-  camera.setPosition(150, 195, 230)
-  camera.lookAt(150, 0, 95)
-  app.root.addChild(camera)
+  mainCamera.setPosition(150, 195, 230)
+  mainCamera.lookAt(150, 0, 95)
+  app.root.addChild(mainCamera)
 
   // ── Raycasting for Agent Inspector ─────────────────────────────────────────
   app!.mouse!.on(pc.EVENT_MOUSEDOWN, (e: pc.MouseEvent) => {
     if (e.button !== pc.MOUSEBUTTON_LEFT || !wasmMemory || !world || !isRunning()) return
 
     const pos = new pc.Vec3()
-    camera.camera!.screenToWorld(e.x, e.y, camera.camera!.farClip, pos)
+    mainCamera!.camera!.screenToWorld(e.x, e.y, mainCamera!.camera!.farClip, pos)
 
-    const origin = camera.getPosition()
+    const origin = mainCamera!.getPosition()
     const dir = new pc.Vec3().sub2(pos, origin).normalize()
 
     // Ray-plane intersection with y = 0 plane
@@ -169,14 +180,14 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   })
 
   // 2. Set up Directional Light
-  const light = new pc.Entity('light')
-  light.addComponent('light', {
+  mainLight = new pc.Entity('light')
+  mainLight.addComponent('light', {
     type: 'directional',
     color: new pc.Color(0.8, 0.9, 1.0),
     intensity: 1.5,
   })
-  light.setEulerAngles(45, 135, 0)
-  app.root.addChild(light)
+  mainLight.setEulerAngles(45, 135, 0)
+  app.root.addChild(mainLight)
 
   // Ambient lighting
   ;(app.scene as any).ambientColor = new pc.Color(0.15, 0.2, 0.3)
@@ -314,6 +325,20 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   foodMaterial.emissive = new pc.Color(0.2, 0.05, 0.05)
   foodMaterial.useLighting = true
   foodMaterial.update()
+
+  // 5. Create Selection Marker
+  const markerMaterial = new pc.StandardMaterial()
+  markerMaterial.emissive = new pc.Color(0.9, 0.2, 0.9) // neon magenta
+  markerMaterial.diffuse = new pc.Color(0, 0, 0)
+  markerMaterial.useLighting = false
+  markerMaterial.update()
+
+  selectionMarker = new pc.Entity('selection-marker')
+  selectionMarker.addComponent('render', { type: 'cone' })
+  selectionMarker.render!.material = markerMaterial
+  selectionMarker.setLocalScale(2, 3, 2)
+  selectionMarker.enabled = false
+  app.root.addChild(selectionMarker)
 }
 
 function clearAgents() {
@@ -422,6 +447,8 @@ export const [simStats, setSimStats] = createSignal<SimStats>({
   tick: 0,
   fps: 0,
   agentCount: 0,
+  timeOfDay: 0,
+  stateCounts: { walking: 0, sleeping: 0, eating: 0, socializing: 0, washing: 0 },
   avgHunger: 0.9,
   avgEnergy: 0.9,
   avgSocial: 0.7,
@@ -509,6 +536,8 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
     tick: 0,
     fps: 0,
     agentCount: world.agent_count(),
+    timeOfDay: 0,
+    stateCounts: { walking: 0, sleeping: 0, eating: 0, socializing: 0, washing: 0 },
     avgHunger: 0.9,
     avgEnergy: 0.9,
     avgSocial: 0.7,
@@ -523,6 +552,32 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
 
     // ── Simulation tick ────────────────────────────────────────────────────
     const tick = world.tick()
+
+    // ── Day / Night Cycle Lighting ──────────────────────────────────────────
+    if (app && app.scene && mainCamera && mainLight) {
+      const timeOfDay = world.time_of_day() // 0.0 to 1.0
+      
+      // Convert timeOfDay to sun angle (0=sunrise, 0.5=sunset, 1.0=sunrise again)
+      // Map: 0.25 (06:00) to sunrise, 0.75 (18:00) to sunset
+      const sunAngleDeg = (timeOfDay - 0.25) * 360
+      mainLight.setLocalEulerAngles(sunAngleDeg, 135, 0)
+      
+      // Calculate sun height for color lerping (1 at noon, 0 at sunrise/sunset, -1 at midnight)
+      const sunHeight = Math.sin((timeOfDay - 0.25) * Math.PI * 2)
+      const clampSunHeight = Math.max(0, sunHeight)
+      
+      const nightColor = new pc.Color(0.06, 0.08, 0.1, 1.0)
+      const dayColor = new pc.Color(0.4, 0.6, 0.9, 1.0)
+      const skyColor = new pc.Color().lerp(nightColor, dayColor, clampSunHeight)
+      mainCamera.camera!.clearColor = skyColor
+      
+      const ambientNight = new pc.Color(0.05, 0.08, 0.12)
+      const ambientDay = new pc.Color(0.3, 0.4, 0.5)
+      ;(app.scene as any).ambientColor = new pc.Color().lerp(ambientNight, ambientDay, clampSunHeight)
+      
+      // Also fade out the directional light slightly at night
+      mainLight.light!.intensity = 0.2 + (clampSunHeight * 1.3)
+    }
 
     // ── FPS counter & UI Stats (update every 60 frames) ───────────────────
     frameCount++
@@ -563,18 +618,19 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
         tick: Number(tick),
         fps,
         agentCount,
+        timeOfDay: world.time_of_day(),
+        stateCounts: {
+          walking: world.state_count(0),
+          sleeping: world.state_count(1),
+          eating: world.state_count(2),
+          socializing: world.state_count(3),
+          washing: world.state_count(4),
+        },
         avgHunger,
         avgEnergy,
         avgSocial,
         avgHygiene,
       })
-
-      // ── Selected Agent Inspector ──────────────────────────────────────────
-      if (selectedAgentId() !== null) {
-        setSelectedAgentDetails(getSelectedAgentDetails())
-      } else {
-        setSelectedAgentDetails(null)
-      }
 
       // ── DuckDB snapshot (every 60 frames, async — non-blocking) ─────────
       if (wasmMemory) {
@@ -587,6 +643,34 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
           world.meta_ptr(),
         ).catch(e => console.warn('[sim-bridge] DuckDB snapshot failed:', e))
       }
+    }
+
+    // ── Selected Agent Inspector (Runs every frame) ───────────────────────
+    const currentSelectedId = selectedAgentId()
+    if (currentSelectedId !== null && selectionMarker && wasmMemory) {
+      // Only re-fetch details every frame for the UI, or we can just fetch it inside
+      // getSelectedAgentDetails directly when solid updates, but doing it here is fine.
+      // Actually let's just update the signal every frame so the UI stays crisp.
+      setSelectedAgentDetails(getSelectedAgentDetails(currentSelectedId))
+
+      // Update marker position to track the agent perfectly
+      const posPtr = world.positions_ptr()
+      const posF32 = new Float32Array(wasmMemory.buffer, posPtr, agentCount * 4)
+      
+      const x = posF32[currentSelectedId * 4]
+      const z = posF32[currentSelectedId * 4 + 2]
+      
+      const targetY = 4.0 + Math.sin(now / 200) * 0.5
+
+      if (!selectionMarker.enabled) {
+        selectionMarker.enabled = true
+      }
+      
+      selectionMarker.setPosition(x, targetY, z)
+      selectionMarker.setLocalEulerAngles(0, now / 10, 180)
+    } else {
+      setSelectedAgentDetails(null)
+      if (selectionMarker) selectionMarker.enabled = false
     }
 
     // ── Zero-copy Wasm ↔ PlayCanvas update ──────────────────────────────────

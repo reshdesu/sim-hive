@@ -14,17 +14,40 @@ const GRID_SIZE_X: usize = 150; // Widescreen 300x200
 const GRID_SIZE_Z: usize = 100;
 const CELL_SIZE: f32 = 2.0;
 
-pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], grid: &[Vec<usize>], buildings: &[Building]) {
+pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], grid: &[Vec<usize>], buildings: &[Building], tick: u64) {
     debug_assert_eq!(needs.len(), meta.len());
     debug_assert_eq!(needs.len(), positions.len());
 
     let houses: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::HOUSE).collect();
     let foods: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::FOOD).collect();
     let workplaces: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::WORKPLACE).collect();
+    let time_of_day = (tick % 10_000) as f32 / 10_000.0;
 
     // 1. Process behavior FSM
     for i in 0..needs.len() {
         let mut flags_i = meta[i].archetype_flags;
+
+        // Give each agent a personal schedule offset from -0.075 to +0.075 (up to 7.5% of the day)
+        // This spreads out their bedtimes and work start times across a 15% window of the day (~3.6 hours)
+        let personal_offset = ((i as f32 * 13.37).fract() - 0.5) * 0.15;
+        
+        let mut local_time = time_of_day + personal_offset;
+        
+        // Night shift workers sleep during the day and work at night!
+        if (flags_i & flags::NIGHT_SHIFT) != 0 {
+            local_time += 0.5;
+        }
+
+        local_time = local_time.fract();
+        if local_time < 0.0 { local_time += 1.0; }
+
+        // Night is 18:00 to 06:00 (0.75 to 1.0, and 0.0 to 0.25)
+        let is_night = local_time > 0.75 || local_time < 0.25;
+        // Work hours are 08:00 to 16:00 (0.33 to 0.66)
+        let is_work_hours = local_time > 0.33 && local_time < 0.66;
+        
+        // At night, everyone gets super tired and wants to go home
+        let energy_critical = if is_night { 0.95 } else { CRITICAL };
 
         // --- Priority Interrupts ---
         // If a vital survival need hits rock bottom (10%), drop everything else!
@@ -42,7 +65,8 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], 
                 let target = houses[meta[i].household_id as usize % houses.len()];
                 if is_near_building(positions[i], target) {
                     needs[i].energy = (needs[i].energy + 0.05).min(1.0);
-                    if needs[i].energy >= SATISFIED {
+                    // Only wake up if we are fully rested AND it's no longer night
+                    if needs[i].energy >= SATISFIED && !is_night {
                         flags_i &= !flags::SLEEPING;
                     }
                 }
@@ -92,20 +116,21 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], 
 
             if near_someone {
                 needs[i].social = (needs[i].social + 0.05).min(1.0);
-                if needs[i].social >= SATISFIED {
+                if needs[i].social >= SATISFIED || is_night || is_work_hours {
                     flags_i &= !flags::SOCIALIZING;
                 }
             } else {
                 needs[i].social = (needs[i].social - 0.0001).max(0.0);
             }
         }
-        // If already washing/cleaning, satisfy hygiene ONLY if near workplace
+        // If already washing/cleaning/working, satisfy hygiene ONLY if near workplace
         else if (flags_i & flags::IN_BUILDING) != 0 {
             if !workplaces.is_empty() {
                 let target = workplaces[i % workplaces.len()];
                 if is_near_building(positions[i], target) {
                     needs[i].hygiene = (needs[i].hygiene + 0.05).min(1.0);
-                    if needs[i].hygiene >= SATISFIED {
+                    // Stop working if work hours are over
+                    if needs[i].hygiene >= SATISFIED || !is_work_hours {
                         flags_i &= !flags::IN_BUILDING;
                     }
                 }
@@ -113,10 +138,12 @@ pub fn run(needs: &mut [Needs], meta: &mut [AgentMeta], positions: &[Position], 
         }
         // Otherwise, pick a new goal if we have NO active goals!
         else if (flags_i & (flags::SLEEPING | flags::EATING | flags::SOCIALIZING | flags::IN_BUILDING)) == 0 {
-            if needs[i].energy < CRITICAL {
+            if needs[i].energy < energy_critical {
                 flags_i |= flags::SLEEPING;
             } else if needs[i].hunger < CRITICAL {
                 flags_i |= flags::EATING;
+            } else if is_work_hours {
+                flags_i |= flags::IN_BUILDING; // Go to work!
             } else if needs[i].social < CRITICAL {
                 flags_i |= flags::SOCIALIZING;
             } else if needs[i].hygiene < CRITICAL {

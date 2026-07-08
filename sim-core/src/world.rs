@@ -73,11 +73,18 @@ impl World {
         }
 
         let meta: Vec<AgentMeta> = (0..n)
-            .map(|i| AgentMeta {
-                entity_id: i as u32,
-                archetype_flags: if i % 3 == 0 { flags::EMPLOYED } else { 0 },
-                age: 18 + (i as u16 % 62),
-                household_id: (i as u16 / 4),
+            .map(|i| {
+                let mut flags = if i % 3 == 0 { flags::EMPLOYED } else { 0 };
+                // 20% of workers work night shift
+                if flags != 0 && i % 5 == 0 {
+                    flags |= flags::NIGHT_SHIFT;
+                }
+                AgentMeta {
+                    entity_id: i as u32,
+                    archetype_flags: flags,
+                    age: 18 + (i as u16 % 62),
+                    household_id: (i as u16 / 4),
+                }
             })
             .collect();
 
@@ -164,7 +171,7 @@ impl World {
         self.rebuild_spatial_grid();
 
         systems::pathfinding::run(&self.positions, &self.meta, &mut self.velocities, &self.grid, &self.buildings, self.tick);
-        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions, &self.grid, &self.buildings);
+        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions, &self.grid, &self.buildings, self.tick);
         systems::movement::run(&mut self.positions, &self.velocities);
 
         // Build flat transform matrices for GPU hardware instancing in Rust
@@ -172,6 +179,11 @@ impl World {
 
         self.tick += 1;
         self.tick
+    }
+
+    /// Returns the current time of day as a float from 0.0 to 1.0 (10,000 ticks per day)
+    pub fn time_of_day(&self) -> f32 {
+        (self.tick % 10_000) as f32 / 10_000.0
     }
 
     /// Rebuild the shared spatial grid once per frame.
