@@ -44,6 +44,7 @@ interface InstancedState {
 }
 
 let instancedStates: InstancedState[] = []
+let buildingEntities: pc.Entity[] = []
 
 // State-specific agent materials (P1 colors)
 let walkMaterial: pc.StandardMaterial | null = null
@@ -51,6 +52,11 @@ let sleepMaterial: pc.StandardMaterial | null = null
 let eatMaterial: pc.StandardMaterial | null = null
 let socialMaterial: pc.StandardMaterial | null = null
 let washMaterial: pc.StandardMaterial | null = null
+
+// Building materials
+let houseMaterial: pc.StandardMaterial | null = null
+let workMaterial: pc.StandardMaterial | null = null
+let foodMaterial: pc.StandardMaterial | null = null
 
 // ── Wasm Loader ──────────────────────────────────────────────────────────────
 
@@ -223,6 +229,25 @@ function initPlayCanvas(canvas: HTMLCanvasElement) {
   washMaterial.emissive = new pc.Color(0.11, 0.43, 0.27)
   washMaterial.useLighting = true
   washMaterial.update()
+
+  // Building materials
+  houseMaterial = new pc.StandardMaterial()
+  houseMaterial.diffuse = new pc.Color(0.2, 0.4, 0.6)
+  houseMaterial.emissive = new pc.Color(0.05, 0.1, 0.2)
+  houseMaterial.useLighting = true
+  houseMaterial.update()
+
+  workMaterial = new pc.StandardMaterial()
+  workMaterial.diffuse = new pc.Color(0.5, 0.5, 0.5)
+  workMaterial.emissive = new pc.Color(0.1, 0.1, 0.1)
+  workMaterial.useLighting = true
+  workMaterial.update()
+
+  foodMaterial = new pc.StandardMaterial()
+  foodMaterial.diffuse = new pc.Color(0.8, 0.3, 0.2)
+  foodMaterial.emissive = new pc.Color(0.2, 0.05, 0.05)
+  foodMaterial.useLighting = true
+  foodMaterial.update()
 }
 
 function clearAgents() {
@@ -232,6 +257,13 @@ function clearAgents() {
     s.vertexBuffer.destroy()
   }
   instancedStates = []
+}
+
+function clearBuildings() {
+  for (const e of buildingEntities) {
+    e.destroy()
+  }
+  buildingEntities = []
 }
 
 function initInstancing(count: number) {
@@ -286,6 +318,38 @@ function initInstancing(count: number) {
   }
 }
 
+function initBuildings() {
+  if (!app || !world || !wasmMemory || !houseMaterial || !workMaterial || !foodMaterial) return
+  clearBuildings()
+  
+  const ptr = world.buildings_ptr()
+  const count = world.buildings_count()
+  const f32 = new Float32Array(wasmMemory.buffer, ptr, count * 5)
+  const u32 = new Uint32Array(wasmMemory.buffer, ptr, count * 5)
+  
+  for (let i = 0; i < count; i++) {
+    const x = f32[i * 5 + 0]
+    const z = f32[i * 5 + 1]
+    const w = f32[i * 5 + 2]
+    const d = f32[i * 5 + 3]
+    const btype = u32[i * 5 + 4]
+    
+    const entity = new pc.Entity(`building-${i}`)
+    entity.addComponent('render', { type: 'box' })
+    
+    if (btype === 0) entity.render!.material = houseMaterial as pc.Material
+    else if (btype === 1) entity.render!.material = workMaterial as pc.Material
+    else entity.render!.material = foodMaterial as pc.Material
+    
+    // Make buildings 2 units tall, resting on the ground
+    entity.setPosition(x, 1.0, z)
+    entity.setLocalScale(w, 2.0, d)
+    
+    app!.root.addChild(entity)
+    buildingEntities.push(entity)
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export const [simStats, setSimStats] = createSignal<SimStats>({
@@ -320,6 +384,7 @@ export async function startSimulation(canvas: HTMLCanvasElement, agentCount = 10
   initPlayCanvas(canvas)
   clearAgents()
   initInstancing(agentCount)
+  initBuildings()
 
   setSimStats({
     tick: 0,
@@ -446,6 +511,7 @@ export function stopSimulation() {
   }
   setIsRunning(false)
   clearAgents()
+  clearBuildings()
   closeDb().catch(() => {})
 }
 

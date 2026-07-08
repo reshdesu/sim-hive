@@ -2,7 +2,7 @@
 // Owns all component arrays and exposes the JS-facing API.
 
 use wasm_bindgen::prelude::*;
-use crate::components::{Position, Velocity, Needs, AgentMeta, flags};
+use crate::components::{Position, Velocity, Needs, AgentMeta, flags, Building, building_type};
 use crate::systems;
 
 /// The top-level simulation container.
@@ -22,6 +22,8 @@ pub struct World {
     // WebGL-instanced matrix buffers
     state_matrices: Vec<Vec<f32>>,
     state_counts:   Vec<u32>,
+
+    pub(crate) buildings: Vec<Building>,
 
     // Shared spatial grid for collision/proximity checks
     grid: Vec<Vec<usize>>,
@@ -56,7 +58,8 @@ impl World {
                 let hunger = 0.6 + (h % 400) as f32 / 1000.0; // 0.6 to 1.0
                 let energy = 0.6 + ((h >> 10) % 400) as f32 / 1000.0; // 0.6 to 1.0
                 let social = 0.4 + ((h >> 20) % 500) as f32 / 1000.0; // 0.4 to 0.9
-                Needs { hunger, energy, social, hygiene: 0.9 }
+                let hygiene = 0.5 + ((h >> 30) % 500) as f32 / 1000.0; // 0.5 to 1.0
+                Needs { hunger, energy, social, hygiene }
             })
             .collect();
 
@@ -88,6 +91,41 @@ impl World {
         let state_counts = vec![0; 5];
         let grid = vec![Vec::with_capacity(16); 100 * 100];
 
+        let mut buildings: Vec<Building> = Vec::new();
+        let num_houses = (n as u16 / 4).max(1);
+        let num_workplaces = (n / 50).max(1);
+        let num_food = (n / 30).max(1);
+        
+        // Lay out buildings organically but prevent overlapping
+        let mut add_buildings = |btype, w: f32, d: f32, count: u32| {
+            for i in 0..count {
+                for attempt in 0..10_000 {
+                    let h = seed_hash((btype as u64) ^ (i as u64) ^ (attempt as u64) ^ 0xABCD);
+                    let x = 15.0 + (h % 170) as f32;
+                    let z = 15.0 + ((h >> 10) % 170) as f32;
+                    
+                    let mut overlap = false;
+                    for b in &buildings {
+                        let dx = (x - b.x).abs();
+                        let dz = (z - b.z).abs();
+                        // 0.5 buffer space between buildings to allow tight packing
+                        if dx < (w + b.width) / 2.0 + 0.5 && dz < (d + b.depth) / 2.0 + 0.5 {
+                            overlap = true;
+                            break;
+                        }
+                    }
+                    if !overlap {
+                        buildings.push(Building { x, z, width: w, depth: d, building_type: btype });
+                        break;
+                    }
+                }
+            }
+        };
+
+        add_buildings(building_type::HOUSE, 4.0, 4.0, num_houses as u32);
+        add_buildings(building_type::WORKPLACE, 10.0, 10.0, num_workplaces as u32);
+        add_buildings(building_type::FOOD, 6.0, 6.0, num_food as u32);
+
         let mut world = Self {
             count,
             positions,
@@ -97,6 +135,7 @@ impl World {
             tick: 0,
             state_matrices,
             state_counts,
+            buildings,
             grid,
         };
 
@@ -112,8 +151,8 @@ impl World {
         // Rebuild the shared spatial grid once per frame: allocation-free and O(N)
         self.rebuild_spatial_grid();
 
-        systems::pathfinding::run(&self.positions, &self.meta, &mut self.velocities, &self.grid, self.tick);
-        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions, &self.grid);
+        systems::pathfinding::run(&self.positions, &self.meta, &mut self.velocities, &self.grid, &self.buildings, self.tick);
+        systems::behavior::run(&mut self.needs, &mut self.meta, &self.positions, &self.grid, &self.buildings);
         systems::movement::run(&mut self.positions, &self.velocities);
 
         // Build flat transform matrices for GPU hardware instancing in Rust
@@ -241,5 +280,13 @@ impl World {
     /// Current simulation tick.
     pub fn current_tick(&self) -> u64 {
         self.tick
+    }
+
+    pub fn buildings_ptr(&self) -> *const Building {
+        self.buildings.as_ptr()
+    }
+
+    pub fn buildings_count(&self) -> u32 {
+        self.buildings.len() as u32
     }
 }

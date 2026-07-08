@@ -63,3 +63,20 @@ pub mod flags {
     pub const SLEEPING: u32      = 1 << 3;
     pub const EATING: u32        = 1 << 4;
 }
+
+/// A static Point of Interest (Building) in the world.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Building {
+    pub x: f32,
+    pub z: f32,
+    pub width: f32,
+    pub depth: f32,
+    pub building_type: u32,
+}
+
+pub mod building_type {
+    pub const HOUSE: u32 = 0;
+    pub const WORKPLACE: u32 = 1;
+    pub const FOOD: u32 = 2;
+}

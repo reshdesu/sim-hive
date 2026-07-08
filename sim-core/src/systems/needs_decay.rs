@@ -5,10 +5,10 @@
 use crate::components::Needs;
 
 /// Per-tick decay rates (tuned for faster lifecycle testing).
-const HUNGER_DECAY:  f32 = 0.0008;
-const ENERGY_DECAY:  f32 = 0.0006;
-const SOCIAL_DECAY:  f32 = 0.001;
-const HYGIENE_DECAY: f32 = 0.0003;
+const HUNGER_DECAY:  f32 = 0.0001;
+const ENERGY_DECAY:  f32 = 0.00007;
+const SOCIAL_DECAY:  f32 = 0.00013;
+const HYGIENE_DECAY: f32 = 0.00003;
 
 pub fn run(needs: &mut [Needs]) {
     for n in needs.iter_mut() {

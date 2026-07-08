@@ -6,7 +6,7 @@
 // Uses a 2D spatial grid to optimize socializing proximity queries to O(N) complexity.
 // Staggers pathfinding updates to run only once every 15 frames per agent, scaling to 100,000+ agents.
 
-use crate::components::{Position, Velocity, AgentMeta, flags};
+use crate::components::{Position, Velocity, AgentMeta, flags, Building, building_type};
 
 /// Step size per tick for the random walk.
 const STEP: f32 = 0.05;
@@ -17,21 +17,54 @@ const STEER_DIST: f32 = 15.0;
 const GRID_SIZE: usize = 100; // Increased grid resolution for 100,000+ agents
 const CELL_SIZE: f32 = 2.0;   // 2.0 units per cell over 200x200 space
 
-pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocity], grid: &[Vec<usize>], tick: u64) {
+pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocity], grid: &[Vec<usize>], buildings: &[Building], tick: u64) {
     debug_assert_eq!(positions.len(), velocities.len());
     debug_assert_eq!(positions.len(), meta.len());
+
+    let houses: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::HOUSE).collect();
+    let foods: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::FOOD).collect();
+    let workplaces: Vec<&Building> = buildings.iter().filter(|b| b.building_type == building_type::WORKPLACE).collect();
 
     // 1. Compute velocities
     for (i, vel) in velocities.iter_mut().enumerate() {
         let m = meta[i];
         
-        // A. Sleeping, Eating, or Washing (IN_BUILDING) agents freeze in place
+        // A. Sleeping, Eating, or Washing (IN_BUILDING) agents pathfind to their POI
         if (m.archetype_flags & (flags::SLEEPING | flags::EATING | flags::IN_BUILDING)) != 0 {
-            vel.dx = 0.0;
-            vel.dz = 0.0;
-            vel.dy = 0.0;
-            vel.speed = 0.0;
-        } 
+            let target_building = if (m.archetype_flags & flags::SLEEPING) != 0 && !houses.is_empty() {
+                Some(houses[m.household_id as usize % houses.len()])
+            } else if (m.archetype_flags & flags::EATING) != 0 && !foods.is_empty() {
+                Some(foods[i % foods.len()])
+            } else if (m.archetype_flags & flags::IN_BUILDING) != 0 && !workplaces.is_empty() {
+                Some(workplaces[i % workplaces.len()])
+            } else {
+                None
+            };
+
+            if let Some(target) = target_building {
+                let dx = target.x - positions[i].x;
+                let dz = target.z - positions[i].z;
+                
+                if dx.abs() <= (target.width / 2.0) + 0.5 && dz.abs() <= (target.depth / 2.0) + 0.5 {
+                    vel.dx = 0.0;
+                    vel.dz = 0.0;
+                    vel.dy = 0.0;
+                    vel.speed = 0.0;
+                } else {
+                    let angle = dz.atan2(dx);
+                    let run_speed = STEP * 5.0; // Moderate sprint to keep vitals high
+                    vel.dx = angle.cos() * run_speed;
+                    vel.dz = angle.sin() * run_speed;
+                    vel.dy = 0.0;
+                    vel.speed = run_speed;
+                }
+            } else {
+                vel.dx = 0.0;
+                vel.dz = 0.0;
+                vel.dy = 0.0;
+                vel.speed = 0.0;
+            }
+        }
         // B. Socializing agents seek their nearest conscious neighbor in the spatial grid
         else if (m.archetype_flags & flags::SOCIALIZING) != 0 {
             // Only recalculate target path every 15 frames per agent to stagger CPU workload
@@ -101,10 +134,11 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
                         let dx = target_pos.x - pos_i.x;
                         let dz = target_pos.z - pos_i.z;
                         let angle = dz.atan2(dx);
-                        vel.dx = angle.cos() * STEP;
-                        vel.dz = angle.sin() * STEP;
+                        let run_speed = STEP * 5.0;
+                        vel.dx = angle.cos() * run_speed;
+                        vel.dz = angle.sin() * run_speed;
                         vel.dy = 0.0;
-                        vel.speed = STEP;
+                        vel.speed = run_speed;
                     }
                 } else {
                     // Fallback to normal random walk
@@ -174,6 +208,54 @@ pub fn run(positions: &[Position], meta: &[AgentMeta], velocities: &mut [Velocit
             vel.dz    = angle.sin() * STEP;
             vel.dy    = 0.0;
             vel.speed = STEP;
+        }
+
+        // --- Smooth Repulsive Building Avoidance ---
+        // If the agent is moving, ensure they flow around buildings without getting trapped in corners
+        if vel.speed > 0.0 {
+            // Find out if they have a target building they are ALLOWED to be inside
+            let target_building = if (m.archetype_flags & flags::SLEEPING) != 0 && !houses.is_empty() {
+                Some(houses[m.household_id as usize % houses.len()])
+            } else if (m.archetype_flags & flags::EATING) != 0 && !foods.is_empty() {
+                Some(foods[i % foods.len()])
+            } else if (m.archetype_flags & flags::IN_BUILDING) != 0 && !workplaces.is_empty() {
+                Some(workplaces[i % workplaces.len()])
+            } else {
+                None
+            };
+            
+            let target_ptr = target_building.map(|b| b as *const Building).unwrap_or(std::ptr::null());
+            
+            let pos = positions[i];
+            for b in buildings {
+                // Don't repel from our own destination building
+                if (b as *const Building) == target_ptr { continue; }
+                
+                let dx = pos.x - b.x;
+                let dz = pos.z - b.z;
+                
+                // Approximate buildings as circles for smooth, fluid repulsion
+                let b_radius = (b.width.max(b.depth) / 2.0) + 1.0;
+                let dist_sq = dx * dx + dz * dz;
+                
+                if dist_sq < b_radius * b_radius {
+                    let dist = dist_sq.sqrt().max(0.001);
+                    // The closer they are to the center, the stronger the push!
+                    let force = (b_radius - dist) / b_radius; 
+                    let repel_strength = force * (STEP * 4.0);
+                    
+                    vel.dx += (dx / dist) * repel_strength;
+                    vel.dz += (dz / dist) * repel_strength;
+                }
+            }
+            
+            // Cap their max speed so the repulsion doesn't launch them out of bounds
+            let speed = (vel.dx * vel.dx + vel.dz * vel.dz).sqrt();
+            let max_speed = STEP * 5.0;
+            if speed > max_speed {
+                vel.dx = (vel.dx / speed) * max_speed;
+                vel.dz = (vel.dz / speed) * max_speed;
+            }
         }
     }
 }
