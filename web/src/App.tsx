@@ -10,13 +10,13 @@ import { dbStatus, snapshotCount, vitalHistory } from './db-bridge'
 const AGENT_COUNT = 1024
 
 const ROADMAP = [
-  { priority: 'p0', label: 'Rust ECS crate (wasm-pack)', done: true },
-  { priority: 'p0', label: 'COEP/COOP headers (SharedArrayBuffer)', done: true },
   { priority: 'p1', label: 'Wasm memory → PlayCanvas instanced draw', done: true },
-  { priority: 'p1', label: 'Archetype storage + movement system', done: true },
   { priority: 'p2', label: 'DuckDB-Wasm + Arrow IPC snapshot', done: true },
-  { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: true }, // We already did the FSM in behavior.rs
-  { priority: 'p4', label: 'Population dashboard (SolidJS)', done: true }, // Sidebar dashboard is also wired and complete!
+  { priority: 'p3', label: 'BehaviorDecisionSystem (FSM)', done: true },
+  { priority: 'p4', label: 'Population dashboard (SolidJS)', done: true },
+  { priority: 'p5', label: 'Buildings & Destinations (Spatial Zones)', done: false },
+  { priority: 'p6', label: 'Agent Inspector (Raycasting & UI)', done: false },
+  { priority: 'p7', label: 'Day / Night Cycle (Time-based logic)', done: false },
 ]
 
 // ── App ───────────────────────────────────────────────────────────────────────

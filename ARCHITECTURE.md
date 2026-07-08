@@ -143,17 +143,23 @@ FROM agent_snapshots GROUP BY tick;
 
 ---
 
-## Build Roadmap
+## Rolling Roadmap
 
+We maintain a rolling roadmap to ensure we always have at least 3 upcoming major milestones in the pipeline as we make progress.
+
+### ✅ Phase 1: Core Engine (Completed)
+- [x] P0: Scaffold Rust crate (`wasm-pack`) + COEP/COOP headers
+- [x] P1: Archetype storage + Wasm memory → WebGPU instanced draw call
+- [x] P2: DuckDB-Wasm + Arrow IPC snapshot pipeline
+- [x] P3: BehaviorDecisionSystem (needs → goal → action FSM)
+- [x] P4: SolidJS UI layer (population dashboard, vitals)
+
+### 🏗️ Phase 2: Environment & Interactivity
 | Priority | Task | Status |
 |---|---|---|
-| P0 | Scaffold Rust crate (`wasm-pack`) with `#[repr(C)]` components | ⬜ Todo |
-| P0 | Verify COEP/COOP headers for `SharedArrayBuffer` | ⬜ Todo |
-| P1 | Archetype storage + basic movement system | ⬜ Todo |
-| P1 | Wasm memory → WebGPU instanced draw call | ⬜ Todo |
-| P2 | DuckDB-Wasm + Arrow IPC snapshot pipeline | ✅ Done |
-| P3 | BehaviorDecisionSystem (needs → goal → action FSM) | ⬜ Todo |
-| P4 | SolidJS UI layer (population dashboard, vitals) | ⬜ Todo |
+| P5 | **Buildings & Destinations:** Introduce spatial zones (Homes, Work, Food). Agents must travel to POIs to satisfy needs. | 🔄 Next |
+| P6 | **Agent Inspector:** Implement Raycasting in PlayCanvas to click and view live stats for individual agents in the UI. | ⬜ Todo |
+| P7 | **Day / Night Cycle:** Add global clock, lighting transitions, and time-based needs decay (e.g., massive wave of sleep at night). | ⬜ Todo |
 
 ---
 

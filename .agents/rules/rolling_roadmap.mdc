@@ -1,0 +1,13 @@
+---
+description: Always enforce a rolling roadmap process with 3 upcoming tasks
+globs: *
+---
+
+# Rolling Roadmap Rule
+
+To maintain forward momentum and a clear vision for the project, always enforce the Rolling Roadmap workflow:
+
+1. **Check the Roadmap**: At the beginning of a session or when determining the next step, always read `ARCHITECTURE.md` to see the current state of the rolling roadmap.
+2. **Execute the Top Item**: Work on the highest priority 'Next' item in the roadmap.
+3. **Always Keep 3 Future Tasks**: When an item is marked as completed (and its status changed to `✅ Done`), you MUST brainstorm and append a new future milestone to the `Upcoming` queue in both `ARCHITECTURE.md` and the UI dashboard (e.g. `App.tsx` if applicable).
+4. **Enforce the Queue Size**: Ensure there are exactly 3 active upcoming tasks in the roadmap pipeline at all times.
